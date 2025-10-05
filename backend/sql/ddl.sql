@@ -1,5 +1,3 @@
-CREATE SCHEMA IF NOT EXISTS control;
-
 -- 1) Connection targets / engines
 CREATE TABLE control.systems (
   id                BIGSERIAL PRIMARY KEY,
@@ -131,27 +129,6 @@ CREATE TABLE control.triggers (
 
 CREATE INDEX triggers_ready_idx ON control.triggers (status, priority);
 
--- 7) Bulk upload jobs (CSV/JSON → many queries/datasets)
-CREATE TABLE control.bulk_jobs (
-  id               BIGSERIAL PRIMARY KEY,
-  uploaded_by      TEXT NOT NULL,
-  source_filename  TEXT,
-  status           TEXT NOT NULL DEFAULT 'received', -- 'received'|'validating'|'applying'|'succeeded'|'failed'
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-  summary          JSONB NOT NULL DEFAULT '{}'::jsonb
-);
-
-CREATE TABLE control.bulk_job_items (
-  id               BIGSERIAL PRIMARY KEY,
-  job_id           BIGINT NOT NULL REFERENCES control.bulk_jobs(id) ON DELETE CASCADE,
-  entity_type      TEXT NOT NULL,                -- 'dataset' | 'compare_query'
-  action           TEXT NOT NULL,                -- 'create'|'update'|'delete'
-  payload          JSONB NOT NULL,               -- normalized row spec
-  status           TEXT NOT NULL DEFAULT 'pending', -- 'pending'|'applied'|'skipped'|'error'
-  error_msg        TEXT
-);
-
 -- 8) Tags for organization / filters in UI
 CREATE TABLE control.tags (
   id    BIGSERIAL PRIMARY KEY,
@@ -164,25 +141,4 @@ CREATE TABLE control.entity_tags (
   tag_id      BIGINT NOT NULL REFERENCES control.tags(id) ON DELETE CASCADE,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (entity_type, entity_id, tag_id)
-);
-
--- 9) Audit trail (simple, effective)
-CREATE TABLE control.audit_log (
-  id           BIGSERIAL PRIMARY KEY,
-  at           TIMESTAMPTZ NOT NULL DEFAULT now(),
-  actor        TEXT NOT NULL,
-  entity_type  TEXT NOT NULL,
-  entity_id    BIGINT NOT NULL,
-  action       TEXT NOT NULL,         -- 'create'|'update'|'delete'|'bulk_apply'
-  before_row   JSONB,
-  after_row    JSONB
-);
-
--- 10) Optional: users (if you want DB-enforced attribution)
-CREATE TABLE control.app_users (
-  id        BIGSERIAL PRIMARY KEY,
-  email     TEXT NOT NULL UNIQUE,
-  full_name TEXT,
-  is_active BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

@@ -3,11 +3,12 @@ import json
 from pathlib import Path
 from typing import Optional, Literal
 
-from fastapi import FastAPI, APIRouter, HTTPException, Response
+from fastapi import FastAPI, APIRouter, HTTPException, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
+import asyncpg
 
 from backend.db import fetch, fetchrow, fetchval, execute
 
@@ -24,6 +25,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------- Global Exception Handlers ----------
+@app.exception_handler(asyncpg.exceptions.UndefinedTableError)
+async def handle_undefined_table(request: Request, exc: asyncpg.exceptions.UndefinedTableError):
+    """
+    Catch database table not found errors and direct user to setup.
+    """
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Database not initialized",
+            "action": "setup_required",
+            "message": "Please go to the Setup tab and click 'Initialize Database'"
+        }
+    )
 
 # ---------- Schemas ----------
 class TableIn(BaseModel):
@@ -599,6 +615,68 @@ async def update_system(id: int, body: SystemUpdate):
 async def delete_system(id: int):
     await execute("DELETE FROM control.systems WHERE id=$1", id)
     return {"ok": True}
+
+# ---------- Setup / Database Reset ----------
+@api.post("/setup/initialize-database")
+async def initialize_database():
+    """
+    Initial setup: Creates schema and tables from DDL (safe, idempotent).
+    """
+    sql_dir = Path(__file__).resolve().parent / "sql"
+    ddl_file = sql_dir / "ddl.sql"
+    grants_file = sql_dir / "grants.sql"
+    
+    if not ddl_file.exists():
+        raise HTTPException(status_code=500, detail=f"DDL file not found: {ddl_file}")
+    
+    # Read DDL and grants
+    ddl_sql = ddl_file.read_text()
+    grants_sql = grants_file.read_text() if grants_file.exists() else ""
+    
+    try:
+        # Execute DDL (idempotent - uses IF NOT EXISTS)
+        await execute(ddl_sql)
+        
+        # Execute grants (if present)
+        if grants_sql:
+            try:
+                await execute(grants_sql)
+            except Exception as e:
+                # Grants might fail in local dev (user doesn't exist), that's ok
+                print(f"[warn] Grants failed (might be ok in local dev): {e}")
+        
+        return {"ok": True, "message": "Database initialized successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database initialization failed: {str(e)}")
+
+@api.post("/setup/reset-database")
+async def reset_database():
+    """
+    ⚠️ DESTRUCTIVE: Drops all tables and recreates them from DDL.
+    """
+    sql_dir = Path(__file__).resolve().parent / "sql"
+    drop_tables_file = sql_dir / "drop_tables.sql"
+    ddl_file = sql_dir / "ddl.sql"
+    
+    if not drop_tables_file.exists():
+        raise HTTPException(status_code=500, detail=f"Drop tables file not found: {drop_tables_file}")
+    if not ddl_file.exists():
+        raise HTTPException(status_code=500, detail=f"DDL file not found: {ddl_file}")
+    
+    # Read SQL files
+    drop_tables_sql = drop_tables_file.read_text()
+    ddl_sql = ddl_file.read_text()
+    
+    try:
+        # 1. Drop all tables (but keep schema)
+        await execute(drop_tables_sql)
+        
+        # 2. Execute DDL (recreate tables)
+        await execute(ddl_sql)
+        
+        return {"ok": True, "message": "Database reset successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database reset failed: {str(e)}")
 
 # ---------- Wire API ----------
 app.include_router(api)

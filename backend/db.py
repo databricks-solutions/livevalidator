@@ -25,13 +25,21 @@ pool: asyncpg.Pool | None = None
 
 
 def _ssl_ctx():
-    """Create SSL context for secure database connections."""
-    if not os.path.exists(DB_SSL_CA_FILE):
-        raise FileNotFoundError(f"SSL CA file not found: {DB_SSL_CA_FILE}")
-    ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=DB_SSL_CA_FILE)
-    # leave verification ON; only disable if you know what you're doing:
-    # ctx.check_hostname = False
-    # ctx.verify_mode = ssl.CERT_NONE
+    """
+    Create SSL context for secure database connections.
+    If a CA file is provided and exists, use it. Otherwise, use system default certificates.
+    """
+    if DB_SSL_CA_FILE and os.path.exists(DB_SSL_CA_FILE):
+        # Use custom CA certificate file if provided
+        ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=DB_SSL_CA_FILE)
+        print(f"🔐 Using custom CA certificate: {DB_SSL_CA_FILE}")
+    else:
+        # Use system default CA certificates (works for most cloud providers including Databricks)
+        ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
+        if DB_SSL_CA_FILE:
+            print(f"ℹ️  Custom CA file not found ({DB_SSL_CA_FILE}), using system defaults")
+    
+    # Keep hostname verification and certificate validation enabled for security
     return ctx
 
 

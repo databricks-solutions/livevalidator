@@ -10,10 +10,22 @@ export async function apiCall(method, url, body) {
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     let detail = text;
+    let action = null;
+    let message = null;
     try {
       const parsed = JSON.parse(text);
       if (parsed.detail) detail = typeof parsed.detail === 'string' ? parsed.detail : JSON.stringify(parsed.detail);
+      if (parsed.action) action = parsed.action;
+      if (parsed.message) message = parsed.message;
     } catch {}
+    
+    // If this is a setup_required error, throw a special error
+    if (action === "setup_required") {
+      const err = new Error(message || detail);
+      err.action = "setup_required";
+      throw err;
+    }
+    
     throw new Error(`${res.status} ${res.statusText}: ${detail}`);
   }
   return res.json();

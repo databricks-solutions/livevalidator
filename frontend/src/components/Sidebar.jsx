@@ -4,7 +4,7 @@ export function Sidebar({ view, setView }) {
   return (
     <div className="w-48 border-r border-charcoal-200 py-5 fixed top-0 left-0 bottom-0 overflow-y-auto bg-charcoal-600">
       <h2 className="px-4 text-lg font-bold text-rust mb-6">LiveValidator</h2>
-      {['tables','queries','schedules','systems'].map(v => (
+      {['tables','queries','schedules','systems','setup'].map(v => (
         <div
           key={v}
           onClick={() => setView(v)}

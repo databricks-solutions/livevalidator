@@ -74,6 +74,11 @@ export default function App() {
   const sc = useFetch(`/api/schedules`, []);
   const sys = useFetch(`/api/systems`, []);
   
+  // Check if database needs initialization
+  const setupRequired = [tbl.error, qs.error, sc.error, sys.error].some(
+    err => err?.action === "setup_required"
+  );
+  
   // Fetch bindings for all entities
   const [bindings, setBindings] = useState({});
 
@@ -368,6 +373,26 @@ export default function App() {
       <div className="ml-48 flex-1 p-10 overflow-y-auto">
         <h1 className="mt-0 text-3xl font-bold text-gray-100">LiveValidator Control Panel</h1>
 
+        {/* Database Setup Required Banner */}
+        {setupRequired && (
+          <div className="my-4 p-4 bg-rust border-l-4 border-rust-light rounded-md shadow-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-100 mb-1">⚠️ Database Not Initialized</h3>
+                <p className="text-gray-200">
+                  The database tables have not been created yet. Please go to the Setup tab and click "Initialize Database".
+                </p>
+              </div>
+              <button 
+                onClick={() => setView('setup')} 
+                className="ml-4 px-4 py-2 bg-purple-600 text-gray-100 font-semibold border-0 rounded-md cursor-pointer hover:bg-purple-500 whitespace-nowrap"
+              >
+                Go to Setup →
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Modals */}
         {conflict && <VersionConflictDialog current={conflict.row} onRefresh={conflict.onRefresh} onCancel={conflict.onCancel} />}
         {editingTable && <TableModal table={editingTable} systems={sys.data} schedules={sc.data} onSave={handleTableSave} onClose={() => setEditingTable(null)} />}
@@ -379,7 +404,7 @@ export default function App() {
         {/* Tables View */}
         {view === 'tables' && (
           <>
-            {tbl.error && <ErrorBox message={tbl.error.message} onClose={tbl.clearError} />}
+            {tbl.error && tbl.error.action !== "setup_required" && <ErrorBox message={tbl.error.message} onClose={tbl.clearError} />}
             <h2 className="text-2xl font-semibold text-rust-light mb-4">Tables</h2>
             <div className="mb-3 flex gap-2">
               <button onClick={() => setEditingTable({})} className="px-3 py-2 bg-purple-600 text-gray-100 border-0 rounded-md cursor-pointer hover:bg-purple-500">Add Table</button>
@@ -404,7 +429,7 @@ export default function App() {
                     <th className="text-left p-2 text-gray-200 font-medium">Actions</th>
                   </tr>
                 </thead>
-                <tbody>
+            <tbody>
                   {tbl.data.map(row => {
                     const entityBindings = bindings[`dataset_${row.id}`] || [];
                     const scheduleNames = entityBindings.map(b => sc.data.find(s => s.id === b.schedule_id)?.name).filter(Boolean).join(', ');
@@ -425,8 +450,8 @@ export default function App() {
                           <button onClick={() => setEditingTable(row)} className="px-2 py-1 text-xs bg-purple-600 text-gray-100 border-0 rounded cursor-pointer hover:bg-purple-500 mr-1">Edit</button>
                           <button onClick={() => handleDelete('tables', row.id)} className="px-2 py-1 text-xs bg-red-600 text-gray-100 border-0 rounded cursor-pointer hover:bg-red-500 mr-1">Del</button>
                           <button onClick={() => triggerNow('dataset', row.id)} className="px-2 py-1 text-xs bg-green-600 text-gray-100 border-0 rounded cursor-pointer hover:bg-green-500">▶️</button>
-                        </td>
-                      </tr>
+                  </td>
+                </tr>
                     );
                   })}
             </tbody>
@@ -439,7 +464,7 @@ export default function App() {
         {/* Queries View */}
         {view === 'queries' && (
           <>
-            {qs.error && <ErrorBox message={qs.error.message} onClose={qs.clearError} />}
+            {qs.error && qs.error.action !== "setup_required" && <ErrorBox message={qs.error.message} onClose={qs.clearError} />}
             <h2 className="text-2xl font-semibold text-rust-light mb-4">Compare Queries</h2>
             <div className="mb-3 flex gap-2">
               <button onClick={() => setEditingQuery({})} className="px-3 py-2 bg-purple-600 text-gray-100 border-0 rounded-md cursor-pointer hover:bg-purple-500">Add Query</button>
@@ -462,7 +487,7 @@ export default function App() {
                     <th className="text-left p-2 text-gray-400 font-medium">Actions</th>
                   </tr>
                 </thead>
-                <tbody>
+            <tbody>
                   {qs.data.map(row => {
                     const entityBindings = bindings[`compare_query_${row.id}`] || [];
                     const scheduleNames = entityBindings.map(b => sc.data.find(s => s.id === b.schedule_id)?.name).filter(Boolean).join(', ');
@@ -495,7 +520,7 @@ export default function App() {
         {/* Schedules View */}
         {view === 'schedules' && (
           <>
-            {sc.error && <ErrorBox message={sc.error.message} onClose={sc.clearError} />}
+            {sc.error && sc.error.action !== "setup_required" && <ErrorBox message={sc.error.message} onClose={sc.clearError} />}
             <h2 className="text-2xl font-semibold text-rust-light mb-4">Schedules</h2>
             <button onClick={() => setEditingSchedule({})} className="mb-3 px-3 py-2 bg-purple-600 text-gray-100 border-0 rounded-md cursor-pointer hover:bg-purple-500">Add Schedule</button>
             {sc.loading ? <p className="text-gray-400">Loading…</p> : (
@@ -537,7 +562,7 @@ export default function App() {
         {/* Systems View */}
         {view === 'systems' && (
           <>
-            {sys.error && <ErrorBox message={sys.error.message} onClose={sys.clearError} />}
+            {sys.error && sys.error.action !== "setup_required" && <ErrorBox message={sys.error.message} onClose={sys.clearError} />}
             <h2 className="text-2xl font-semibold text-rust-light mb-4">Systems</h2>
             <button onClick={() => setEditingSystem({})} className="mb-3 px-3 py-2 bg-purple-600 text-gray-100 border-0 rounded-md cursor-pointer hover:bg-purple-500">Add System</button>
             {sys.loading ? <p className="text-gray-400">Loading…</p> : (
@@ -573,6 +598,187 @@ export default function App() {
                 })}
               </div>
             )}
+          </>
+        )}
+
+        {view === 'setup' && (
+          <>
+            <h2 className="text-2xl font-semibold text-rust-light mb-4">Database Setup</h2>
+            
+            <div className="max-w-2xl">
+              {/* Initial Setup Section */}
+              <div className="bg-purple-900/30 border-2 border-purple-600 rounded-lg p-6 mb-6">
+                <h3 className="text-purple-400 font-bold text-xl mb-4">🚀 Initial Setup</h3>
+                <p className="text-gray-300 mb-6">
+                  Follow these steps to set up a <strong className="text-purple-400">fresh deployment</strong>. 
+                  Each step only needs to be completed once per database instance.
+                </p>
+
+                {/* Step 1 */}
+                <div className="mb-5 pb-5 border-b border-gray-700">
+                  <h4 className="text-purple-300 font-semibold text-lg mb-3">
+                    <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">1</span>
+                    Run SQL Commands as Database Creator
+                  </h4>
+                  <p className="text-gray-300 text-sm mb-3 ml-9">
+                    The <strong>creator</strong> of the Lakebase PostgreSQL instance must run the following commands in the <strong>Databricks SQL Editor</strong>:
+                  </p>
+                  <pre className="bg-charcoal-800 p-3 rounded text-xs text-gray-200 overflow-x-auto border border-gray-700 ml-9">
+{`CREATE USER apprunner WITH PASSWORD 'beepboop123';
+
+CREATE SCHEMA IF NOT EXISTS control;
+GRANT USAGE ON SCHEMA control to apprunner;
+ALTER SCHEMA control OWNER TO apprunner;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA control TO apprunner;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA control TO apprunner;`}
+                  </pre>
+                </div>
+
+                {/* Step 2 */}
+                <div className="mb-5 pb-5 border-b border-gray-700">
+                  <h4 className="text-purple-300 font-semibold text-lg mb-3">
+                    <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">2</span>
+                    Enable Postgres Native Role Login
+                  </h4>
+                  <p className="text-gray-300 text-sm mb-2 ml-9">
+                    In the Databricks UI, enable native Postgres role login for your database instance.
+                  </p>
+                  <p className="text-gray-400 text-sm ml-9">
+                    📖 <a 
+                      href="https://docs.databricks.com/aws/en/oltp/instances/authentication#authenticate-with-postgres-roles-and-passwords" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-purple-400 hover:text-purple-300 underline"
+                    >
+                      View Databricks documentation for detailed instructions →
+                    </a>
+                  </p>
+                </div>
+
+                {/* Step 3 */}
+                <div className="mb-5 pb-5 border-b border-gray-700">
+                  <h4 className="text-purple-300 font-semibold text-lg mb-3">
+                    <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">3</span>
+                    Initialize the Database
+                  </h4>
+                  <p className="text-gray-300 text-sm mb-3 ml-9">
+                    Click the button below to create the database schema and tables.
+                  </p>
+                  <ul className="text-gray-400 text-sm mb-4 ml-9 list-disc list-inside space-y-1">
+                    <li>Creates all tables from <code className="bg-charcoal-600 px-1 rounded">backend/sql/ddl.sql</code></li>
+                    <li><strong className="text-green-400">Safe:</strong> Uses <code className="bg-charcoal-600 px-1 rounded">IF NOT EXISTS</code> - won't destroy existing data</li>
+                  </ul>
+                  <button 
+                    onClick={async () => {
+                      try {
+                        await apiCall('POST', '/api/setup/initialize-database', {});
+                        alert('✅ Database initialized successfully!\n\nSchema and tables have been created.');
+                        // Refresh all data
+                        tbl.refresh();
+                        qs.refresh();
+                        sc.refresh();
+                        sys.refresh();
+                      } catch (err) {
+                        alert(`❌ Database initialization failed:\n\n${err.message}`);
+                      }
+                    }}
+                    className="ml-9 px-6 py-3 bg-purple-600 text-white font-bold border-0 rounded-lg cursor-pointer hover:bg-purple-500 text-lg shadow-lg"
+                  >
+                    ✨ Initialize Database
+                  </button>
+                </div>
+
+                {/* Step 4 */}
+                <div className="mb-5 pb-5 border-b border-gray-700">
+                  <h4 className="text-purple-300 font-semibold text-lg mb-3">
+                    <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">4</span>
+                    Configure Source and Target Systems
+                  </h4>
+                  <p className="text-gray-300 text-sm mb-2 ml-9">
+                    Go to the <strong>Systems</strong> tab and add your source and target systems with their connection details.
+                  </p>
+                  <p className="text-gray-400 text-sm ml-9">
+                    💡 <em>You'll need at least one source and one target system before creating tables or queries.</em>
+                  </p>
+                </div>
+
+                {/* Step 5 */}
+                <div className="mb-5 pb-5 border-b border-gray-700">
+                  <h4 className="text-purple-300 font-semibold text-lg mb-3">
+                    <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">5</span>
+                    Create Schedules
+                  </h4>
+                  <p className="text-gray-300 text-sm mb-2 ml-9">
+                    Go to the <strong>Schedules</strong> tab and add schedules with cron expressions for automated validation runs.
+                  </p>
+                  <p className="text-gray-400 text-sm ml-9">
+                    💡 <em>Example: "0 2 * * *" runs daily at 2 AM UTC.</em>
+                  </p>
+                </div>
+
+                {/* Step 6 */}
+                <div className="mb-4">
+                  <h4 className="text-purple-300 font-semibold text-lg mb-3">
+                    <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">6</span>
+                    Add Tables and Queries
+                  </h4>
+                  <p className="text-gray-300 text-sm mb-2 ml-9">
+                    Go to the <strong>Tables</strong> or <strong>Queries</strong> tabs to define your validation rules and bind them to schedules.
+                  </p>
+                  <ul className="text-gray-400 text-sm ml-9 list-disc list-inside space-y-1">
+                    <li><strong>Tables:</strong> Schema-driven comparisons between source and target tables</li>
+                    <li><strong>Queries:</strong> Custom SQL comparisons for complex validation logic</li>
+                    <li><strong>Schedule Binding:</strong> Select which schedules should trigger each validation</li>
+                  </ul>
+                </div>
+        </div>
+
+              {/* Danger Zone Section */}
+              <div className="bg-red-900/30 border-2 border-red-600 rounded-lg p-6 mb-6">
+                <h3 className="text-red-400 font-bold text-xl mb-3">⚠️ Danger Zone</h3>
+                <p className="text-gray-300 mb-4">
+                  This will <strong className="text-red-400">permanently delete ALL data</strong> in the control schema and recreate the tables from scratch using <code className="bg-charcoal-600 px-2 py-1 rounded">ddl.sql</code>.
+                </p>
+                <ul className="text-gray-400 text-sm mb-4 list-disc list-inside space-y-1">
+                  <li>All Tables, Queries, Schedules, Systems, and Bindings will be deleted</li>
+                  <li>This cannot be undone</li>
+                  <li>Database will be recreated from <code className="bg-charcoal-600 px-1 rounded">backend/sql/ddl.sql</code></li>
+                  <li>Grants will be re-run from <code className="bg-charcoal-600 px-1 rounded">backend/sql/grants.sql</code></li>
+        </ul>
+                <p className="text-gray-500 text-xs mb-4">
+                  Use this for initial setup or after updating the database schema in code.
+                </p>
+              </div>
+
+              <button 
+                onClick={async () => {
+                  if (!confirm('⚠️ Are you absolutely sure?\n\nThis will DELETE ALL DATA and cannot be undone.\n\nType "DELETE" in the next prompt to confirm.')) {
+                    return;
+                  }
+                  const confirmation = prompt('Type "DELETE" (all caps) to confirm:');
+                  if (confirmation !== 'DELETE') {
+                    alert('Reset cancelled.');
+                    return;
+                  }
+                  
+                  try {
+                    await apiCall('POST', '/api/setup/reset-database', {});
+                    alert('✅ Database reset successfully!\n\nAll data has been cleared and tables recreated.');
+                    // Refresh all data
+                    tbl.refresh();
+                    qs.refresh();
+                    sc.refresh();
+                    sys.refresh();
+                  } catch (err) {
+                    alert(`❌ Database reset failed:\n\n${err.message}`);
+                  }
+                }}
+                className="px-6 py-3 bg-red-600 text-white font-bold border-0 rounded-lg cursor-pointer hover:bg-red-500 text-lg shadow-lg"
+              >
+                🗑️ Reset Database (Delete All Data)
+              </button>
+            </div>
           </>
         )}
       </div>

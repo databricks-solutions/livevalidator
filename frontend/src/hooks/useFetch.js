@@ -15,6 +15,21 @@ export function useFetch(url, deps = []) {
       .then(async (r) => {
         if (!r.ok) {
           const text = await r.text().catch(() => "");
+          let action = null;
+          let message = null;
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed.action) action = parsed.action;
+            if (parsed.message) message = parsed.message;
+          } catch {}
+          
+          // If this is a setup_required error, throw a special error
+          if (action === "setup_required") {
+            const err = new Error(message || "Database not initialized");
+            err.action = "setup_required";
+            throw err;
+          }
+          
           throw new Error(`${r.status} ${r.statusText}: ${text || "Request failed"}`);
         }
         return r.json();
