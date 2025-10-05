@@ -124,18 +124,6 @@ export function QueryModal({ query, systems, schedules, onSave, onClose }) {
               <input value={Array.isArray(form.pk_columns)?form.pk_columns.join(', '):''} onChange={e=>setForm({...form, pk_columns:e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})} placeholder="e.g., id, user_id" className="w-full px-3 py-2.5 rounded-md border border-charcoal-200 bg-charcoal-400 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
               <p className="text-gray-500 text-xs mt-1">Comma-separated list of columns that uniquely identify rows</p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block mb-1.5 font-medium text-gray-300 text-sm">Include Columns</label>
-                <input value={Array.isArray(form.include_columns)?form.include_columns.join(', '):''} onChange={e=>setForm({...form, include_columns:e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})} placeholder="e.g., name, email, status" className="w-full px-3 py-2.5 rounded-md border border-charcoal-200 bg-charcoal-400 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
-                <p className="text-gray-500 text-xs mt-1">Only compare these columns (optional)</p>
-              </div>
-              <div>
-                <label className="block mb-1.5 font-medium text-gray-300 text-sm">Exclude Columns</label>
-                <input value={Array.isArray(form.exclude_columns)?form.exclude_columns.join(', '):''} onChange={e=>setForm({...form, exclude_columns:e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})} placeholder="e.g., updated_at, modified_by" className="w-full px-3 py-2.5 rounded-md border border-charcoal-200 bg-charcoal-400 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
-                <p className="text-gray-500 text-xs mt-1">Skip these columns in comparison</p>
-              </div>
-            </div>
           </div>
           
           {/* Schedule Bindings */}

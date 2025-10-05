@@ -85,8 +85,6 @@ class QueryIn(BaseModel):
     sql: str
     compare_mode: Literal['except_all','primary_key','hash'] = 'except_all'
     pk_columns: Optional[list[str]] = None
-    include_columns: list[str] = Field(default_factory=list)
-    exclude_columns: list[str] = Field(default_factory=list)
     options: dict = Field(default_factory=dict)
     is_active: bool = True
     updated_by: str
@@ -98,8 +96,6 @@ class QueryUpdate(BaseModel):
     sql: Optional[str] = None
     compare_mode: Optional[Literal['except_all','primary_key','hash']] = None
     pk_columns: Optional[list[str]] = None
-    include_columns: Optional[list[str]] = None
-    exclude_columns: Optional[list[str]] = None
     options: Optional[dict] = None
     is_active: Optional[bool] = None
     updated_by: str
@@ -358,14 +354,14 @@ async def create_query(body: QueryIn):
     row = await fetchrow("""
         INSERT INTO control.compare_queries (
           name, src_system_id, tgt_system_id, sql,
-          compare_mode, pk_columns, include_columns, exclude_columns,
+          compare_mode, pk_columns,
           options, is_active, created_by, updated_by
         ) VALUES (
-          $1,$2,$3,$4, $5,$6,$7,$8, $9,$10,$11,$11
+          $1,$2,$3,$4, $5,$6, $7,$8,$9,$9
         ) RETURNING *
     """,
     body.name, body.src_system_id, body.tgt_system_id, body.sql,
-    body.compare_mode, body.pk_columns, body.include_columns, body.exclude_columns,
+    body.compare_mode, body.pk_columns,
     json.dumps(body.options) if isinstance(body.options, (dict, list)) else body.options, body.is_active, body.updated_by)
     return dict(row)
 
@@ -383,18 +379,16 @@ async def update_query(id: int, body: QueryUpdate):
           sql           = COALESCE($5, sql),
           compare_mode  = COALESCE($6, compare_mode),
           pk_columns    = COALESCE($7, pk_columns),
-          include_columns = COALESCE($8, include_columns),
-          exclude_columns = COALESCE($9, exclude_columns),
-          options = COALESCE($10, options),
-          is_active = COALESCE($11, is_active),
-          updated_by = $12,
+          options = COALESCE($8, options),
+          is_active = COALESCE($9, is_active),
+          updated_by = $10,
           updated_at = now(),
           version = version + 1
-        WHERE id=$1 AND version=$13
+        WHERE id=$1 AND version=$11
         RETURNING *
     """,
     id, body.name, body.src_system_id, body.tgt_system_id, body.sql,
-    body.compare_mode, body.pk_columns, body.include_columns, body.exclude_columns,
+    body.compare_mode, body.pk_columns,
     json.dumps(body.options) if isinstance(body.options, (dict, list)) else body.options, body.is_active, body.updated_by, body.version)
     if not row:
         current = await fetchrow("SELECT * FROM control.compare_queries WHERE id=$1", id)
@@ -412,8 +406,6 @@ class BulkQueryItem(BaseModel):
     schedule_name: str
     compare_mode: Optional[Literal['except_all','primary_key','hash']] = 'except_all'
     pk_columns: Optional[list[str]] = None
-    include_columns: Optional[list[str]] = None
-    exclude_columns: Optional[list[str]] = None
     is_active: Optional[bool] = True
 
 class BulkQueryRequest(BaseModel):
@@ -439,15 +431,12 @@ async def bulk_create_queries(body: BulkQueryRequest):
                 row = await fetchrow("""
                     UPDATE control.compare_queries SET
                       src_system_id = $2,
-                      src_sql = $3,
+                      sql = $3,
                       tgt_system_id = $4,
-                      tgt_sql = $3,
                       compare_mode = $5,
                       pk_columns = $6,
-                      include_columns = $7,
-                      exclude_columns = $8,
-                      is_active = $9,
-                      updated_by = $10,
+                      is_active = $7,
+                      updated_by = $8,
                       updated_at = now(),
                       version = version + 1
                     WHERE id=$1
@@ -455,23 +444,21 @@ async def bulk_create_queries(body: BulkQueryRequest):
                 """,
                 existing['id'], body.src_system_id, item.sql, body.tgt_system_id,
                 item.compare_mode, item.pk_columns, 
-                item.include_columns or [], item.exclude_columns or [],
                 item.is_active, body.updated_by)
                 results["updated"].append({"row": idx + 1, "name": name, "data": dict(row)})
             else:
                 # Create new
                 row = await fetchrow("""
                     INSERT INTO control.compare_queries (
-                      name, src_system_id, src_sql, tgt_system_id, tgt_sql,
-                      compare_mode, pk_columns, include_columns, exclude_columns,
+                      name, src_system_id, sql, tgt_system_id,
+                      compare_mode, pk_columns,
                       is_active, created_by, updated_by
                     ) VALUES (
-                      $1,$2,$3,$4,$3,$5,$6,$7,$8,$9,$10,$10
+                      $1,$2,$3,$4,$5,$6,$7,$8,$8
                     ) RETURNING *
                 """,
                 name, body.src_system_id, item.sql, body.tgt_system_id,
                 item.compare_mode, item.pk_columns,
-                item.include_columns or [], item.exclude_columns or [],
                 item.is_active, body.updated_by)
                 
                 # Bind to schedule

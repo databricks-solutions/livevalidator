@@ -499,8 +499,6 @@ export default function App() {
                       <td className="p-2 text-gray-400 text-xs max-w-xs truncate font-mono">{row.src_sql || row.sql}</td>
                       <td className="p-2 text-gray-300 text-sm">{row.compare_mode}</td>
                       <td className="p-2 text-gray-300 text-xs">{row.pk_columns?.join(', ') || '-'}</td>
-                      <td className="p-2 text-gray-300 text-xs">{row.include_columns?.join(', ') || '-'}</td>
-                      <td className="p-2 text-gray-300 text-xs">{row.exclude_columns?.join(', ') || '-'}</td>
                       <td className="p-2 text-purple-400 text-xs">{scheduleNames || '-'}</td>
                         <td className="p-2">
                           <button onClick={() => setEditingQuery(row)} className="px-2 py-1 text-xs bg-purple-600 text-gray-100 border-0 rounded cursor-pointer hover:bg-purple-500 mr-1">Edit</button>
@@ -628,6 +626,7 @@ export default function App() {
 
 CREATE SCHEMA IF NOT EXISTS control;
 GRANT USAGE ON SCHEMA control to apprunner;
+GRANT apprunner TO CURRENT_USER;
 ALTER SCHEMA control OWNER TO apprunner;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA control TO apprunner;

@@ -59,8 +59,6 @@ CREATE TABLE control.compare_queries (
 
   compare_mode     TEXT NOT NULL DEFAULT 'except_all',   -- same options as datasets
   pk_columns       TEXT[] DEFAULT NULL,
-  include_columns  TEXT[] NOT NULL DEFAULT '{}',
-  exclude_columns  TEXT[] NOT NULL DEFAULT '{}',
   options          JSONB NOT NULL DEFAULT '{}'::jsonb,
   is_active        BOOLEAN NOT NULL DEFAULT TRUE,
 
