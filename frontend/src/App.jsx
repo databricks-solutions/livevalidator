@@ -92,13 +92,13 @@ export default function App() {
   
   // Auto-refresh for validation results and queue views
   useEffect(() => {
-    if (view === 'results') {
+    if (view === 'results' && !validations.error) {
       const interval = setInterval(() => {
         validations.refresh();
       }, 5000);
       return () => clearInterval(interval);
     }
-  }, [view]);
+  }, [view, validations.error]);
   
   useEffect(() => {
     if (view === 'queue') {
@@ -250,7 +250,7 @@ export default function App() {
   };
 
   // Table save handler
-  const handleTableSave = async (form, selectedSchedules) => {
+  const handleTableSave = async (form, selectedSchedules, tags) => {
     try {
       let tableId;
       if (editingTable?.id) {
@@ -286,6 +286,11 @@ export default function App() {
         }
       }
       
+      // Sync tags
+      if (tableId && tags !== undefined) {
+        await apiCall("POST", `/api/tags/entity/table/${tableId}`, { tags });
+      }
+      
       refreshAll();
       setEditingTable(null);
     } catch (err) {
@@ -302,7 +307,7 @@ export default function App() {
   };
 
   // Query save handler
-  const handleQuerySave = async (form, selectedSchedules) => {
+  const handleQuerySave = async (form, selectedSchedules, tags) => {
     try {
       let queryId;
       if (editingQuery.id) {
@@ -336,6 +341,11 @@ export default function App() {
             });
           }
         }
+      }
+      
+      // Sync tags
+      if (queryId && tags !== undefined) {
+        await apiCall("POST", `/api/tags/entity/query/${queryId}`, { tags });
       }
       
       refreshAll();
@@ -494,6 +504,7 @@ export default function App() {
             onClearError={tbl.clearError}
             renderCell={renderCell}
             onNavigateToResult={navigateToResult}
+            onRefresh={refreshAll}
           />
         )}
 
@@ -513,6 +524,7 @@ export default function App() {
             onClearError={qs.clearError}
             renderCell={renderCell}
             onNavigateToResult={navigateToResult}
+            onRefresh={refreshAll}
           />
         )}
 

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { TagInput } from '../TagInput';
 
 export function TableModal({ table, systems, schedules, onSave, onClose }) {
   // Combine schema.table for display
@@ -33,8 +34,10 @@ export function TableModal({ table, systems, schedules, onSave, onClose }) {
   }));
   
   const [selectedSchedules, setSelectedSchedules] = useState([]);
+  const [tags, setTags] = useState([]);
+  const [allTags, setAllTags] = useState([]);
   
-  // Fetch existing bindings for this table
+  // Fetch existing bindings and tags for this table
   useEffect(() => {
     if (table?.id) {
       fetch(`/api/bindings/table/${table.id}`)
@@ -44,7 +47,20 @@ export function TableModal({ table, systems, schedules, onSave, onClose }) {
           setSelectedSchedules(scheduleIds);
         })
         .catch(() => setSelectedSchedules([]));
+      
+      fetch(`/api/tags/entity/table/${table.id}`)
+        .then(r => r.json())
+        .then(data => setTags(data.map(t => t.name)))
+        .catch(() => setTags([]));
+    } else {
+      setTags(table?.tags || []);
     }
+    
+    // Fetch all existing tags for autocomplete
+    fetch('/api/tags')
+      .then(r => r.json())
+      .then(data => setAllTags(data.map(t => t.name)))
+      .catch(() => setAllTags([]));
   }, [table?.id]);
   
   // Auto-populate target and name when source changes
@@ -83,7 +99,7 @@ export function TableModal({ table, systems, schedules, onSave, onClose }) {
       tgt_table: tgt.table
     };
     
-    await onSave(payload, selectedSchedules);
+    await onSave(payload, selectedSchedules, tags);
   };
   
   const toggleSchedule = (scheduleId) => {
@@ -187,6 +203,17 @@ export function TableModal({ table, systems, schedules, onSave, onClose }) {
               <label className="block mb-1 font-medium text-gray-400 text-sm">Exclude Columns (comma-separated)</label>
               <input value={Array.isArray(form.exclude_columns)?form.exclude_columns.join(','):''} onChange={e=>setForm({...form, exclude_columns:e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})} className="w-full px-2 py-2 rounded-md border border-charcoal-200 bg-charcoal-400 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Optional" />
             </div>
+          </div>
+          
+          {/* Tags */}
+          <div className="mb-3 pb-3 border-t border-charcoal-200 pt-3">
+            <label className="block mb-2 font-medium text-gray-400 text-sm">Tags</label>
+            <TagInput 
+              tags={tags}
+              allTags={allTags}
+              onChange={setTags}
+              placeholder="Add tags (press Enter)..."
+            />
           </div>
           
           {/* Schedule Bindings */}

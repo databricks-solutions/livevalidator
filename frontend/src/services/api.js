@@ -139,6 +139,22 @@ export const validationService = {
 };
 
 /**
+ * Tag operations
+ */
+export const tagService = {
+  list: () => fetch("/api/tags").then(r => r.json()),
+  create: (name) => apiCall("POST", "/api/tags", { name }),
+  getEntityTags: (entityType, entityId) => 
+    fetch(`/api/tags/entity/${entityType}/${entityId}`).then(r => r.json()),
+  setEntityTags: (entityType, entityId, tags) => 
+    apiCall("POST", `/api/tags/entity/${entityType}/${entityId}`, { tags }),
+  bulkAdd: (entityType, entityIds, tags) => 
+    apiCall("POST", "/api/tags/entity/bulk-add", { entity_type: entityType, entity_ids: entityIds, tags }),
+  bulkRemove: (entityType, entityIds, tags) => 
+    apiCall("POST", "/api/tags/entity/bulk-remove", { entity_type: entityType, entity_ids: entityIds, tags }),
+};
+
+/**
  * Unified API object
  */
 export const API = {

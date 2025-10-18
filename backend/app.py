@@ -69,7 +69,14 @@ async def list_tables(q: str | None = None):
                 d.*,
                 vh.id as last_run_id,
                 vh.status as last_run_status,
-                vh.finished_at as last_run_timestamp
+                vh.finished_at as last_run_timestamp,
+                COALESCE(
+                    (SELECT json_agg(t.name ORDER BY t.name)
+                     FROM control.entity_tags et
+                     JOIN control.tags t ON et.tag_id = t.id
+                     WHERE et.entity_type = 'table' AND et.entity_id = d.id),
+                    '[]'::json
+                ) as tags
             FROM control.datasets d
             LEFT JOIN LATERAL (
                 SELECT id, status, finished_at
@@ -87,7 +94,14 @@ async def list_tables(q: str | None = None):
                 d.*,
                 vh.id as last_run_id,
                 vh.status as last_run_status,
-                vh.finished_at as last_run_timestamp
+                vh.finished_at as last_run_timestamp,
+                COALESCE(
+                    (SELECT json_agg(t.name ORDER BY t.name)
+                     FROM control.entity_tags et
+                     JOIN control.tags t ON et.tag_id = t.id
+                     WHERE et.entity_type = 'table' AND et.entity_id = d.id),
+                    '[]'::json
+                ) as tags
             FROM control.datasets d
             LEFT JOIN LATERAL (
                 SELECT id, status, finished_at
@@ -246,7 +260,14 @@ async def list_queries(q: str | None = None):
                 cq.*,
                 vh.id as last_run_id,
                 vh.status as last_run_status,
-                vh.finished_at as last_run_timestamp
+                vh.finished_at as last_run_timestamp,
+                COALESCE(
+                    (SELECT json_agg(t.name ORDER BY t.name)
+                     FROM control.entity_tags et
+                     JOIN control.tags t ON et.tag_id = t.id
+                     WHERE et.entity_type = 'query' AND et.entity_id = cq.id),
+                    '[]'::json
+                ) as tags
             FROM control.compare_queries cq
             LEFT JOIN LATERAL (
                 SELECT id, status, finished_at
@@ -264,7 +285,14 @@ async def list_queries(q: str | None = None):
                 cq.*,
                 vh.id as last_run_id,
                 vh.status as last_run_status,
-                vh.finished_at as last_run_timestamp
+                vh.finished_at as last_run_timestamp,
+                COALESCE(
+                    (SELECT json_agg(t.name ORDER BY t.name)
+                     FROM control.entity_tags et
+                     JOIN control.tags t ON et.tag_id = t.id
+                     WHERE et.entity_type = 'query' AND et.entity_id = cq.id),
+                    '[]'::json
+                ) as tags
             FROM control.compare_queries cq
             LEFT JOIN LATERAL (
                 SELECT id, status, finished_at
@@ -682,22 +710,22 @@ async def list_validation_history(
     param_idx = 1
     
     if entity_type:
-        conditions.append(f"entity_type = ${param_idx}")
+        conditions.append(f"vh.entity_type = ${param_idx}")
         params.append(entity_type)
         param_idx += 1
     
     if entity_id:
-        conditions.append(f"entity_id = ${param_idx}")
+        conditions.append(f"vh.entity_id = ${param_idx}")
         params.append(entity_id)
         param_idx += 1
     
     if status:
-        conditions.append(f"status = ${param_idx}")
+        conditions.append(f"vh.status = ${param_idx}")
         params.append(status)
         param_idx += 1
     
     if schedule_id:
-        conditions.append(f"schedule_id = ${param_idx}")
+        conditions.append(f"vh.schedule_id = ${param_idx}")
         params.append(schedule_id)
         param_idx += 1
     
@@ -705,17 +733,28 @@ async def list_validation_history(
     
     rows = await fetch(f"""
         SELECT 
-            id, trigger_id, entity_type, entity_id, entity_name,
-            source, schedule_id, requested_by, requested_at,
-            started_at, finished_at, duration_seconds,
-            source_system_name, target_system_name,
-            status, schema_match, row_count_match,
-            row_count_source, row_count_target,
-            rows_compared, rows_different, difference_pct,
-            error_message, databricks_run_url
-        FROM control.validation_history
+            vh.id, vh.trigger_id, vh.entity_type, vh.entity_id, vh.entity_name,
+            vh.source, vh.schedule_id, vh.requested_by, vh.requested_at,
+            vh.started_at, vh.finished_at, vh.duration_seconds,
+            vh.source_system_name, vh.target_system_name,
+            vh.status, vh.schema_match, vh.row_count_match,
+            vh.row_count_source, vh.row_count_target,
+            vh.rows_compared, vh.rows_different, vh.difference_pct,
+            vh.error_message, vh.databricks_run_url,
+            COALESCE(
+                (SELECT json_agg(t.name ORDER BY t.name)
+                 FROM control.entity_tags et
+                 JOIN control.tags t ON et.tag_id = t.id
+                 WHERE et.entity_type = CASE 
+                     WHEN vh.entity_type = 'table' THEN 'table'
+                     WHEN vh.entity_type = 'compare_query' THEN 'query'
+                     ELSE vh.entity_type
+                 END AND et.entity_id = vh.entity_id),
+                '[]'::json
+            ) as tags
+        FROM control.validation_history vh
         {where_clause}
-        ORDER BY finished_at DESC
+        ORDER BY vh.finished_at DESC
         LIMIT ${param_idx} OFFSET ${param_idx + 1}
     """, *params, limit, offset)
     
@@ -925,6 +964,139 @@ async def fail_trigger(id: int, body: dict):
     
     # Remove from queue
     await execute("DELETE FROM control.triggers WHERE id=$1", id)
+    return {"ok": True}
+
+# ---------- Tags ----------
+@api.get("/tags")
+async def list_tags():
+    """Get all tags."""
+    rows = await fetch("SELECT * FROM control.tags ORDER BY name")
+    return [dict(r) for r in rows]
+
+@api.post("/tags")
+async def create_tag(body: dict):
+    """Create a new tag (or return existing if name already exists)."""
+    name = body.get("name", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Tag name is required")
+    
+    # Check if tag already exists
+    existing = await fetchrow("SELECT * FROM control.tags WHERE name = $1", name)
+    if existing:
+        return dict(existing)
+    
+    # Create new tag
+    row = await fetchrow("INSERT INTO control.tags (name) VALUES ($1) RETURNING *", name)
+    return dict(row)
+
+@api.get("/tags/entity/{entity_type}/{entity_id}")
+async def get_entity_tags(entity_type: str, entity_id: int):
+    """Get all tags for a specific entity."""
+    rows = await fetch("""
+        SELECT t.id, t.name
+        FROM control.tags t
+        JOIN control.entity_tags et ON et.tag_id = t.id
+        WHERE et.entity_type = $1 AND et.entity_id = $2
+        ORDER BY t.name
+    """, entity_type, entity_id)
+    return [dict(r) for r in rows]
+
+@api.post("/tags/entity/{entity_type}/{entity_id}")
+async def set_entity_tags(entity_type: str, entity_id: int, body: dict):
+    """Set tags for an entity (replaces existing tags)."""
+    tag_names = body.get("tags", [])
+    
+    # Delete existing tags for this entity
+    await execute("DELETE FROM control.entity_tags WHERE entity_type = $1 AND entity_id = $2", entity_type, entity_id)
+    
+    # Create tags if they don't exist and associate with entity
+    for tag_name in tag_names:
+        tag_name = tag_name.strip()
+        if not tag_name:
+            continue
+        
+        # Get or create tag
+        tag = await fetchrow("SELECT id FROM control.tags WHERE name = $1", tag_name)
+        if not tag:
+            tag = await fetchrow("INSERT INTO control.tags (name) VALUES ($1) RETURNING id", tag_name)
+        
+        # Associate tag with entity
+        await execute("""
+            INSERT INTO control.entity_tags (entity_type, entity_id, tag_id)
+            VALUES ($1, $2, $3)
+            ON CONFLICT DO NOTHING
+        """, entity_type, entity_id, tag['id'])
+    
+    # Clean up unused tags
+    await execute("""
+        DELETE FROM control.tags
+        WHERE id NOT IN (SELECT DISTINCT tag_id FROM control.entity_tags)
+    """)
+    
+    return {"ok": True}
+
+@api.post("/tags/entity/bulk-add")
+async def bulk_add_tags(body: dict):
+    """Add tags to multiple entities."""
+    entity_type = body.get("entity_type")
+    entity_ids = body.get("entity_ids", [])
+    tag_names = body.get("tags", [])
+    
+    if not entity_type or not entity_ids or not tag_names:
+        raise HTTPException(status_code=400, detail="entity_type, entity_ids, and tags are required")
+    
+    for tag_name in tag_names:
+        tag_name = tag_name.strip()
+        if not tag_name:
+            continue
+        
+        # Get or create tag
+        tag = await fetchrow("SELECT id FROM control.tags WHERE name = $1", tag_name)
+        if not tag:
+            tag = await fetchrow("INSERT INTO control.tags (name) VALUES ($1) RETURNING id", tag_name)
+        
+        # Associate tag with all entities
+        for entity_id in entity_ids:
+            await execute("""
+                INSERT INTO control.entity_tags (entity_type, entity_id, tag_id)
+                VALUES ($1, $2, $3)
+                ON CONFLICT DO NOTHING
+            """, entity_type, entity_id, tag['id'])
+    
+    return {"ok": True}
+
+@api.post("/tags/entity/bulk-remove")
+async def bulk_remove_tags(body: dict):
+    """Remove tags from multiple entities."""
+    entity_type = body.get("entity_type")
+    entity_ids = body.get("entity_ids", [])
+    tag_names = body.get("tags", [])
+    
+    if not entity_type or not entity_ids or not tag_names:
+        raise HTTPException(status_code=400, detail="entity_type, entity_ids, and tags are required")
+    
+    for tag_name in tag_names:
+        tag_name = tag_name.strip()
+        if not tag_name:
+            continue
+        
+        # Get tag
+        tag = await fetchrow("SELECT id FROM control.tags WHERE name = $1", tag_name)
+        if not tag:
+            continue
+        
+        # Remove association from all entities
+        await execute("""
+            DELETE FROM control.entity_tags
+            WHERE entity_type = $1 AND entity_id = ANY($2) AND tag_id = $3
+        """, entity_type, entity_ids, tag['id'])
+    
+    # Clean up unused tags
+    await execute("""
+        DELETE FROM control.tags
+        WHERE id NOT IN (SELECT DISTINCT tag_id FROM control.entity_tags)
+    """)
+    
     return {"ok": True}
 
 # ---------- Systems ----------

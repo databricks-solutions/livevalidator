@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { TagInput } from '../TagInput';
 
 export function QueryModal({ query, systems, schedules, onSave, onClose }) {
   const [form, setForm] = useState(() => ({
@@ -16,8 +17,10 @@ export function QueryModal({ query, systems, schedules, onSave, onClose }) {
   }));
   
   const [selectedSchedules, setSelectedSchedules] = useState([]);
+  const [tags, setTags] = useState([]);
+  const [allTags, setAllTags] = useState([]);
   
-  // Fetch existing bindings for this query
+  // Fetch existing bindings and tags for this query
   useEffect(() => {
     if (query?.id) {
       fetch(`/api/bindings/compare_query/${query.id}`)
@@ -27,11 +30,24 @@ export function QueryModal({ query, systems, schedules, onSave, onClose }) {
           setSelectedSchedules(scheduleIds);
         })
         .catch(() => setSelectedSchedules([]));
+      
+      fetch(`/api/tags/entity/query/${query.id}`)
+        .then(r => r.json())
+        .then(data => setTags(data.map(t => t.name)))
+        .catch(() => setTags([]));
+    } else {
+      setTags(query?.tags || []);
     }
+    
+    // Fetch all existing tags for autocomplete
+    fetch('/api/tags')
+      .then(r => r.json())
+      .then(data => setAllTags(data.map(t => t.name)))
+      .catch(() => setAllTags([]));
   }, [query?.id]);
   
   const handleSave = async () => {
-    await onSave(form, selectedSchedules);
+    await onSave(form, selectedSchedules, tags);
   };
   
   const toggleSchedule = (scheduleId) => {
@@ -124,6 +140,17 @@ export function QueryModal({ query, systems, schedules, onSave, onClose }) {
               <input value={Array.isArray(form.pk_columns)?form.pk_columns.join(', '):''} onChange={e=>setForm({...form, pk_columns:e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})} placeholder="e.g., id, user_id" className="w-full px-3 py-2.5 rounded-md border border-charcoal-200 bg-charcoal-400 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
               <p className="text-gray-500 text-xs mt-1">Comma-separated list of columns that uniquely identify rows</p>
             </div>
+          </div>
+          
+          {/* Tags */}
+          <div className="mb-6 pb-6 border-b border-charcoal-200">
+            <h4 className="text-rust-light font-semibold mb-3 text-base">Tags</h4>
+            <TagInput 
+              tags={tags}
+              allTags={allTags}
+              onChange={setTags}
+              placeholder="Add tags (press Enter)..."
+            />
           </div>
           
           {/* Schedule Bindings */}
