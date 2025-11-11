@@ -6,3 +6,4 @@ export { SchedulesView } from './SchedulesView';
 export { SystemsView } from './SystemsView';
 export { SetupView } from './SetupView';
 export { ConfigurationView } from './ConfigurationView';
+export { TypeMappingsView } from './TypeMappingsView';

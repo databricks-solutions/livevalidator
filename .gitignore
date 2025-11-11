@@ -9,5 +9,6 @@ package-lock.json
 .idea/
 backend/__pycache__/
 frontend/node_modules/
-frontend/dist/
 frontend/build/
+# Keep dist/ in git for Databricks deployment
+# But you need to manually rebuild before committing UI changes

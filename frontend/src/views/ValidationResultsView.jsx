@@ -356,7 +356,7 @@ export function ValidationResultsView({ data, loading, error, onClearError, high
       <div className="mb-4 flex items-start justify-between">
         <div>
           <h2 className="text-3xl font-bold text-rust-light mb-1">🎯 Validation Results</h2>
-          <p className="text-gray-400 text-base">Recent validation history for the last 30 days</p>
+          <p className="text-gray-400 text-base">Recent validation history for the last 7 days</p>
         </div>
         {selectedIds.length > 0 && (
           <button

@@ -156,6 +156,25 @@ export const tagService = {
 };
 
 /**
+ * Type transformation operations
+ */
+export const typeTransformationService = {
+  list: () => fetch("/api/type-transformations").then(r => r.json()),
+  get: (systemAId, systemBId) => 
+    apiCall("GET", `/api/type-transformations/${systemAId}/${systemBId}`),
+  create: (data) => 
+    apiCall("POST", "/api/type-transformations", { ...data, updated_by: DEFAULT_USER }),
+  update: (systemAId, systemBId, data) => 
+    apiCall("PUT", `/api/type-transformations/${systemAId}/${systemBId}`, { ...data, updated_by: DEFAULT_USER }),
+  delete: (systemAId, systemBId) => 
+    apiCall("DELETE", `/api/type-transformations/${systemAId}/${systemBId}`),
+  getDefault: (systemKind) => 
+    fetch(`/api/type-transformations/default/${systemKind}`).then(r => r.json()),
+  validateCode: (code) => 
+    apiCall("POST", "/api/validate-python", { code }),
+};
+
+/**
  * Unified API object
  */
 export const API = {

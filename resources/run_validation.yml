@@ -11,9 +11,11 @@ resources:
               backend_api_url: ${var.backend_api_url}
           timeout_seconds: 3600
           disable_auto_optimization: true
+          existing_cluster_id: ${resources.clusters.livevalidator.id}
+          libraries:
+            - maven:
+                coordinates: com.teradata.jdbc:terajdbc:20.00.00.51
       
-      # Use serverless compute
-      job_clusters: []
       max_concurrent_runs: 500
       parameters:
         - name: trigger_id

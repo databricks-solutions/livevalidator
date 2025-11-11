@@ -27,10 +27,7 @@ resources:
               poll_interval: "30"
           max_retries: 5
 #          environment_key: default
-
-#          libraries:
-#            - pypi:
-#                package: croniter
+          
 
 #      environments:
 #        - environment_key: default

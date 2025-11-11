@@ -125,6 +125,39 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA control
           <div className="mb-5 pb-5 border-b border-gray-700">
             <h4 className="text-purple-300 font-semibold text-lg mb-3">
               <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">5</span>
+              Define Secrets
+            </h4>
+            <p className="text-gray-300 text-sm mb-3 ml-9">
+              While eng is working on an oauth token exchange, add secrets for livevalidator app SP:
+              Get them from this URL:
+              
+              https://live-validator-your-instance.aws.databricksapps.com/api/secrets
+            </p>
+            <pre className="bg-charcoal-800 p-3 rounded text-xs text-gray-200 overflow-x-auto border border-gray-700 ml-9">
+{`from databricks.sdk import WorkspaceClient
+from databricks.sdk.service.workspace import AclPermission
+
+w = WorkspaceClient()
+w.secrets.create_scope('livevalidator')
+w.secrets.put_acl('livevalidator', 'users', AclPermission.READ)
+w.secrets.put_secret('livevalidator', key="lv-app-id", string_value=<first value>)
+w.secrets.put_secret('livevalidator', key="lv-app-secret", string_value=<second value>)`}
+            </pre>
+            <div>
+            <p className="text-gray-300 text-sm mb-3 ml-9">
+              Add secrets for any JDBC authentication if needed:
+            </p>
+            <pre className="bg-charcoal-800 p-3 rounded text-xs text-gray-200 overflow-x-auto border border-gray-700 ml-9">
+{`w.secrets.put_secret('livevalidator', key="mysystem_user", string_value="my_user")
+w.secrets.put_secret('livevalidator', key="mysystem_pass", string_value="*******")`}
+            </pre>
+            </div>
+          </div>
+
+          {/* Step 6 */}
+          <div className="mb-5 pb-5 border-b border-gray-700">
+            <h4 className="text-purple-300 font-semibold text-lg mb-3">
+              <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">6</span>
               Create Schedules
             </h4>
             <p className="text-gray-300 text-sm ml-9">
@@ -132,10 +165,10 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA control
             </p>
           </div>
 
-          {/* Step 6 */}
+          {/* Step 7 */}
           <div className="mb-5">
             <h4 className="text-purple-300 font-semibold text-lg mb-3">
-              <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">6</span>
+              <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">7</span>
               Add Tables and Queries
             </h4>
             <p className="text-gray-300 text-sm ml-9">

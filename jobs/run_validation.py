@@ -11,7 +11,7 @@ import traceback
 from datetime import datetime, date, UTC
 from decimal import Decimal
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, regexp_replace
+from pyspark.sql.functions import col, regexp_replace, translate
 from databricks.sdk import WorkspaceClient
 
 # Initialize workspace client for auth
@@ -62,13 +62,8 @@ extra_replace_regex: str = dbutils.widgets.get("extra_replace_regex")
 options: dict = json.loads(dbutils.widgets.get("options") or "{}")
 
 print(f"Starting: {name} (trigger_id={trigger_id or 'manual'})")
-
-if compare_mode != "except_all":
-    raise ValueError(f"Unsupported compare_mode: {compare_mode}")
-
-if len(replace_special_char) not in (0,2):
-    raise ValueError(f'Malformmatted "replace_special_char" argument. Must be format [<max allowable hex>, <replacement char>] e.g. ["7F", "?"] or ["FF", "�"]')
 # COMMAND ----------
+# DBTITLE 1,Define functions to interact with the backend and run schema/count checks
 
 def api_call(method: str, endpoint: str, data: dict | None = None, headers = w.config.authenticate()) -> dict:
     """Call backend API with Databricks authentication"""
@@ -77,6 +72,24 @@ def api_call(method: str, endpoint: str, data: dict | None = None, headers = w.c
     response.raise_for_status()
     return response.json()
 
+if compare_mode != "except_all":
+    error: str = f"Unsupported compare_mode: {compare_mode}"
+    api_call("PUT", f"/api/triggers/{trigger_id}/fail", {
+            "status": "error",
+            "error_message": error,
+            "error_details": {"type": type(e).__name__}
+        })
+    raise ValueError(error)
+
+if len(replace_special_char) not in (0,2):
+    error: str = f'Malformmatted "replace_special_char" argument. Must be format [<max allowable hex>, <replacement char>] e.g. ["7F", "?"] or ["FF", "�"]'
+    api_call("PUT", f"/api/triggers/{trigger_id}/fail", {
+            "status": "error",
+            "error_message": error,
+            "error_details": {"type": type(e).__name__}
+        })
+    raise ValueError(error)
+
 def get_connection_info(system_name: str) -> dict:
     """Fetch system and prepare connection info"""
     system: dict = api_call("GET", f"/api/systems/name/{system_name}")
@@ -84,8 +97,15 @@ def get_connection_info(system_name: str) -> dict:
     if system["kind"] == "Databricks":
         return {"type": "catalog", "catalog": system.get("catalog"), "system": system}
     
-    jdbc_str: str = system["jdbc_string"] if system["jdbc_string"] \
-        else f"jdbc:{system['kind'].lower()}://{system['host']}:{system['port']}/{system['database']}"
+    jdbc_str: str
+    if system["jdbc_string"]:
+        jdbc_str = system["jdbc_string"]
+    else:
+        match system["kind"]:
+            case "Teradata":
+               jdbc_str = f"jdbc:{system['kind'].lower()}://{system['host']}"
+            case _:
+               jdbc_str = f"jdbc:{system['kind'].lower()}://{system['host']}:{system['port']}/{system['database']}"
 
     return {
         "type": "jdbc",
@@ -95,21 +115,116 @@ def get_connection_info(system_name: str) -> dict:
         "system": system
     }    
 
-def read_data(conn: dict, table: str | None = None, query: str | None = None) -> DataFrame:
-    """Read data from system"""
-    if conn["type"] == "catalog":
-        if query:
-            spark.sql(f"USE CATALOG `{conn['catalog']}`;")
-            return spark.sql(query)
-        return spark.table(f"`{conn['catalog']}`.{table}")
+def get_type_transformations(source_system_id: int, target_system_id: int) -> tuple[str, str]:
+    """
+    Fetch type transformation functions for a system pair. Empty strings mean no transformation defined.
+    """
+    data: dict = api_call("GET", f"/api/type-transformations/for-validation/{source_system_id}/{target_system_id}")
+
+    source_func: str = data.get('system_a_function', '')
+    target_func: str = data.get('system_b_function', '')
+
+    return source_func, target_func
+
+def query_jdbc(conn_info: dict, query: str) -> DataFrame:    
+    system_kind = conn_info["system"]["kind"]
     
-    opts: dict = {"url": conn["jdbc_string"], "user": conn["username"], "password": conn["password"]}
-    if query:
-        opts["query"] = query
+    driver_map = {
+        "Netezza": "org.netezza.Driver",
+        "Teradata": "com.teradata.jdbc.TeraDriver",
+        "SQLServer": "com.microsoft.sqlserver.jdbc.SQLServerDriver",
+        "MySQL": "com.mysql.cj.jdbc.Driver",
+        "Postgres": "org.postgresql.Driver",
+        "Snowflake": "net.snowflake.client.jdbc.SnowflakeDriver"
+    }
+    
+    driver = driver_map.get(system_kind)
+    if not driver:
+        raise ValueError(f"No JDBC driver configured for system type: {system_kind}")
+    
+    return spark.read \
+        .format("jdbc") \
+        .option("url", conn_info["jdbc_string"]) \
+        .option("driver", driver) \
+        .option("query", query) \
+        .option("user", conn_info.get("username")) \
+        .option("password", conn_info.get("password")) \
+        .load()
+
+def get_column_types(conn: dict, table: str | None = None) -> list[tuple[str, str]]:
+
+    tbl_parts = table.split(".")
+    if len(tbl_parts) == 2:
+        schema, tbl = tbl_parts
+        catalog = None
+    elif len(tbl_parts) == 3:
+        catalog, schema, tbl = tbl_parts
     else:
-        opts["dbtable"] = table
+        raise ValueError(f"Table must have format 'catalog.schema.table' or 'schema.table' for type mapping.")
+
+    match conn["system"]["kind"]:
+        case "Databricks":
+            table_schema = spark.read.table(f"{catalog}.{schema}.{tbl}").schema
+            return [(col.name, str(col.dataType)) for col in table_schema.fields]
+        case "Teradata":
+            query_columns = f"""
+            SELECT ColumnName as column_name, ColumnType as data_type
+            FROM DBC.ColumnsV 
+            WHERE UPPER(DatabaseName) = '{schema.upper()}' 
+            AND UPPER(TableName) = '{tbl.upper()}'
+            """
+        case "Netezza" | "SQLServer" | "MySQL" | "Postgres" | "Snowflake":
+            query_columns = f"""
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE UPPER(table_name) = '{tbl.upper()}' 
+            AND UPPER(table_schema) = '{schema.upper()}'
+            """
+            if catalog:
+                query_columns += f" AND UPPER(TABLE_CATALOG) = '{catalog.upper()}'"
+        case _:
+            raise ValueError(f"Unsupported system type: {conn['system']['kind']}")
+
+    # Read the column names into a DataFrame
+    column_df: DataFrame = query_jdbc(conn, query_columns)
+
+    # Extract the column names from the DataFrame
+    return [(row[0], row[1]) for row in column_df.collect()]
+
+def generate_read_query(conn: dict, table: str, type_mapping_func: str) -> str:
+    """Generate the query to read the data from the system"""
+
+    print(f"Mapping types for system: '{conn['system']['name']}' with type mapping function: \n{type_mapping_func}")
+    namespace = {}
+    exec(type_mapping_func, namespace)
+    transform_columns: Callable = namespace['transform_columns']
+
+    col_types: list[tuple[str, str]] = get_column_types(conn, table)
+    cast_columns: list[str] = [transform_columns(name, data_type) for name, data_type in col_types] if len(col_types) > 0 else ["*"]
+    return f"SELECT {', '.join(cast_columns)} FROM {table}"
+
+def read_data(conn: dict, table: str | None = None, query: str | None = None, type_mapping_func: str | None = None) -> DataFrame:
+    """Read data from system"""
+    is_databricks: bool = conn["system"]["kind"] == "Databricks"
+
+    if query:
+        if is_databricks:
+            if conn["type"] == "catalog":
+                spark.sql(f"USE CATALOG `{conn['catalog']}`;")
+            return spark.sql(query)
+        else:
+            return query_jdbc(conn, query)
     
-    return spark.read.format("jdbc").options(**opts).load()
+    # it is 'table' and we may need to do type mapping
+    if is_databricks:
+        table: str = f"`{conn['catalog']}`.{table}"
+
+    read_query = generate_read_query(conn, table, type_mapping_func) if type_mapping_func.strip() else f"SELECT * FROM {table}"
+    
+    if is_databricks:
+        return spark.sql(read_query) 
+    
+    return query_jdbc(conn, read_query)
 
 def validate_schema(src_df: DataFrame, tgt_df: DataFrame, exclude: list[str]) -> dict:
     """Compare column names"""
@@ -145,7 +260,7 @@ def validate_counts(src_df: DataFrame, tgt_df: DataFrame) -> dict[str, int | boo
     }
 
 # COMMAND ----------
-
+# DBTITLE 1,Define functions to process validation records
 def serialize_value(val):
     """Convert non-JSON-serializable objects to serializable formats"""
     match val:
@@ -155,6 +270,37 @@ def serialize_value(val):
             return float(val)
         case _:
             return val
+
+def sub_non_break_spaces(df: DataFrame) -> DataFrame:
+    return df.select(*(
+        regexp_replace(col(c.name).cast("string"), rf"[\u00A0\u2000-\u200A\u202F]", " ").alias(c.name)
+        if c.dataType.typeName() == "string" else c.name
+        for c in df.schema.fields 
+    ))
+
+def downgrade_unicode_symbols(df: DataFrame) -> DataFrame:
+    df = df.select(*(
+        translate(col(c.name).cast("string"), "‘（）Å", "`???").alias(c.name)
+        if c.dataType.typeName() == "string" else c.name
+        for c in df.schema.fields 
+    ))
+
+    return df
+
+def sub_special_char(df: DataFrame, max_hex: str, sub_char: str, extra_replace_regex: str = extra_replace_regex) -> DataFrame:
+    df = df.select(*(
+        regexp_replace(col(c.name).cast("string"), rf"[^\u0000-\u00{max_hex}]", sub_char).alias(c.name)
+        if c.dataType.typeName() == "string" else c.name
+        for c in df.schema.fields 
+    ))
+
+    df = df.select(*(
+        regexp_replace(col(c.name).cast("string"), extra_replace_regex, sub_char).alias(c.name)
+        if c.dataType.typeName() == "string" else c.name
+        for c in df.schema.fields 
+    ))
+
+    return df
 
 def drop_diacritics(df: DataFrame) -> DataFrame:
     """
@@ -183,37 +329,6 @@ def drop_diacritics(df: DataFrame) -> DataFrame:
         for c in df.schema.fields 
     ))
 
-def sub_non_break_spaces(df: DataFrame) -> DataFrame:
-    return df.select(*(
-        regexp_replace(col(c.name).cast("string"), f"[\u00A0\u2007\u202F]", " ").alias(c.name)
-        if c.dataType.typeName() == "string" else c.name
-        for c in df.schema.fields 
-    ))
-
-def downgrade_unicode_symbols(df: DataFrame) -> DataFrame:
-    df = df.select(*(
-        regexp_replace(col(c.name).cast("string"), f"[\u2018]", "`").alias(c.name)
-        if c.dataType.typeName() == "string" else c.name
-        for c in df.schema.fields 
-    ))
-
-    return df
-
-def sub_special_char(df: DataFrame, max_hex: str, sub_char: str, extra_replace_regex: str = extra_replace_regex) -> DataFrame:
-    df = df.select(*(
-        regexp_replace(col(c.name).cast("string"), f"[^\\x00-\\x{max_hex}]", sub_char).alias(c.name)
-        if c.dataType.typeName() == "string" else c.name
-        for c in df.schema.fields 
-    ))
-
-    df = df.select(*(
-        regexp_replace(col(c.name).cast("string"), extra_replace_regex, sub_char).alias(c.name)
-        if c.dataType.typeName() == "string" else c.name
-        for c in df.schema.fields 
-    ))
-
-    return df
-
 def _downgrade_unicode(df: DataFrame):
     df = sub_non_break_spaces(df)
     df = downgrade_unicode_symbols(df)
@@ -221,6 +336,9 @@ def _downgrade_unicode(df: DataFrame):
     _max_hex, _sub_char = replace_special_char
     df = sub_special_char(df, _max_hex, _sub_char)
     return df
+
+# COMMAND ----------
+# DBTITLE 1,Run row-level validation
 
 def validate_rows(src_df: DataFrame, tgt_df: DataFrame, exclude: list[str]) -> dict:
     """Row-level validation using EXCEPT ALL"""
@@ -306,8 +424,9 @@ try:
     
     # Read data
     print("Reading data...")
-    src_df: DataFrame = read_data(src_conn, table=source_table, query=sql)
-    tgt_df: DataFrame = read_data(tgt_conn, table=target_table, query=sql)
+    src_xform_func, tgt_xform_func = get_type_transformations(src_conn["system"]["id"], tgt_conn["system"]["id"])
+    src_df: DataFrame = read_data(src_conn, table=source_table, query=sql, type_mapping_func=src_xform_func)
+    tgt_df: DataFrame = read_data(tgt_conn, table=target_table, query=sql, type_mapping_func=tgt_xform_func)
     
     # Validate
     print("Validating schema...")

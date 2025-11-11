@@ -16,8 +16,10 @@ from backend.models import (
     TableIn, TableUpdate, BulkTableItem, BulkTableRequest,
     QueryIn, QueryUpdate, BulkQueryItem, BulkQueryRequest,
     ScheduleIn, ScheduleUpdate, BindingIn,
-    TriggerIn, SystemIn, SystemUpdate
+    TriggerIn, SystemIn, SystemUpdate,
+    TypeTransformationIn, TypeTransformationUpdate, ValidatePythonCode
 )
+from backend.default_transformations import get_default_transformation
 
 app = FastAPI(title="LiveValidator Control Plane API", version="0.1")
 
@@ -904,6 +906,342 @@ async def update_validation_config(body: dict):
     
     # Return updated config
     return await get_validation_config()
+
+# ---------- Type Transformations ----------
+@api.get("/type-transformations")
+async def list_type_transformations():
+    """Get all type transformations with system details"""
+    rows = await fetch("""
+        SELECT 
+            tt.*,
+            sa.name as system_a_name,
+            sa.kind as system_a_kind,
+            sb.name as system_b_name,
+            sb.kind as system_b_kind
+        FROM control.type_transformations tt
+        JOIN control.systems sa ON tt.system_a_id = sa.id
+        JOIN control.systems sb ON tt.system_b_id = sb.id
+        ORDER BY sa.name, sb.name
+    """)
+    return [dict(r) for r in rows]
+
+@api.get("/type-transformations/default/{system_kind}")
+async def get_default_transformation_for_system(system_kind: str):
+    """Get default transformation function for a system type"""
+    return {
+        "system_kind": system_kind,
+        "function": get_default_transformation(system_kind)
+    }
+
+@api.get("/type-transformations/for-validation/{system_a_id}/{system_b_id}")
+async def get_type_transformation_for_validation(system_a_id: int, system_b_id: int):
+    """
+    Get type transformation for a validation job (non-directional, with defaults).
+    Returns empty strings if no transformation exists, allowing the job to handle defaults.
+    """
+    # Normalize to match storage order
+    min_id = min(system_a_id, system_b_id)
+    max_id = max(system_a_id, system_b_id)
+    is_swapped = system_a_id != min_id
+    
+    row = await fetchrow("""
+        SELECT 
+            tt.*,
+            sa.name as system_a_name,
+            sa.kind as system_a_kind,
+            sb.name as system_b_name,
+            sb.kind as system_b_kind
+        FROM control.type_transformations tt
+        JOIN control.systems sa ON tt.system_a_id = sa.id
+        JOIN control.systems sb ON tt.system_b_id = sb.id
+        WHERE tt.system_a_id = $1 AND tt.system_b_id = $2
+    """, min_id, max_id)
+    
+    if not row:
+        # No transformation defined - return empty functions
+        sys_a = await fetchrow("SELECT name, kind FROM control.systems WHERE id = $1", system_a_id)
+        sys_b = await fetchrow("SELECT name, kind FROM control.systems WHERE id = $1", system_b_id)
+        
+        return {
+            "exists": False,
+            "system_a_id": system_a_id,
+            "system_b_id": system_b_id,
+            "system_a_name": sys_a['name'] if sys_a else None,
+            "system_a_kind": sys_a['kind'] if sys_a else None,
+            "system_b_name": sys_b['name'] if sys_b else None,
+            "system_b_kind": sys_b['kind'] if sys_b else None,
+            "system_a_function": "",
+            "system_b_function": ""
+        }
+    
+    # Map stored order to requested order
+    if is_swapped:
+        system_a_func, system_b_func = row['system_b_function'], row['system_a_function']
+        system_a_name, system_b_name = row['system_b_name'], row['system_a_name']
+        system_a_kind, system_b_kind = row['system_b_kind'], row['system_a_kind']
+    else:
+        system_a_func, system_b_func = row['system_a_function'], row['system_b_function']
+        system_a_name, system_b_name = row['system_a_name'], row['system_b_name']
+        system_a_kind, system_b_kind = row['system_a_kind'], row['system_b_kind']
+    
+    return {
+        "exists": True,
+        "system_a_id": system_a_id,
+        "system_b_id": system_b_id,
+        "system_a_name": system_a_name,
+        "system_a_kind": system_a_kind,
+        "system_b_name": system_b_name,
+        "system_b_kind": system_b_kind,
+        "system_a_function": system_a_func,
+        "system_b_function": system_b_func
+    }
+
+@api.get("/type-transformations/{system_a_id}/{system_b_id}")
+async def get_type_transformation(system_a_id: int, system_b_id: int):
+    """Get type transformation for a system pair (non-directional)"""
+    # Normalize to match storage order
+    system_a = min(system_a_id, system_b_id)
+    system_b = max(system_a_id, system_b_id)
+    
+    row = await fetchrow("""
+        SELECT 
+            tt.*,
+            sa.name as system_a_name,
+            sa.kind as system_a_kind,
+            sb.name as system_b_name,
+            sb.kind as system_b_kind
+        FROM control.type_transformations tt
+        JOIN control.systems sa ON tt.system_a_id = sa.id
+        JOIN control.systems sb ON tt.system_b_id = sb.id
+        WHERE tt.system_a_id = $1 AND tt.system_b_id = $2
+    """, system_a, system_b)
+    
+    if not row:
+        raise HTTPException(404, "Type transformation not found for this system pair")
+    return dict(row)
+
+@api.post("/type-transformations")
+async def create_type_transformation(body: TypeTransformationIn):
+    """Create a new type transformation for a system pair"""
+    print(f"\n[BACKEND CREATE] Received from frontend:")
+    print(f"  body.system_a_id = {body.system_a_id}")
+    print(f"  body.system_b_id = {body.system_b_id}")
+    print(f"  body.system_a_function = '{body.system_a_function[:50] if body.system_a_function else 'EMPTY'}'...")
+    print(f"  body.system_b_function = '{body.system_b_function[:50] if body.system_b_function else 'EMPTY'}'...")
+    
+    # Normalize the pair to avoid duplicates
+    system_a = min(body.system_a_id, body.system_b_id)
+    system_b = max(body.system_a_id, body.system_b_id)
+    
+    print(f"[BACKEND CREATE] After normalization: system_a={system_a}, system_b={system_b}")
+    print(f"[BACKEND CREATE] Checking: body.system_a_id ({body.system_a_id}) == system_a ({system_a})? {body.system_a_id == system_a}")
+    
+    # Swap functions if IDs were swapped
+    if body.system_a_id == system_a:
+        func_a, func_b = body.system_a_function, body.system_b_function
+        print(f"[BACKEND CREATE] NO SWAP - using functions as-is")
+    else:
+        func_a, func_b = body.system_b_function, body.system_a_function
+        print(f"[BACKEND CREATE] SWAPPED - func_a gets body.system_b_function, func_b gets body.system_a_function")
+    
+    print(f"[BACKEND CREATE] Will store:")
+    print(f"  system_a_id={system_a}, system_a_function='{func_a[:50] if func_a else 'EMPTY'}'...")
+    print(f"  system_b_id={system_b}, system_b_function='{func_b[:50] if func_b else 'EMPTY'}'...\n")
+    
+    # Check if systems exist
+    sys_a = await fetchrow("SELECT id, kind FROM control.systems WHERE id = $1", system_a)
+    sys_b = await fetchrow("SELECT id, kind FROM control.systems WHERE id = $1", system_b)
+    
+    if not sys_a or not sys_b:
+        raise HTTPException(404, "One or both systems not found")
+    
+    try:
+        row = await fetchrow("""
+            INSERT INTO control.type_transformations 
+                (system_a_id, system_b_id, system_a_function, system_b_function, updated_by)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING *
+        """, system_a, system_b, func_a, func_b, body.updated_by)
+        
+        return dict(row)
+    except asyncpg.UniqueViolationError:
+        raise HTTPException(409, "Type transformation already exists for this system pair")
+
+@api.put("/type-transformations/{system_a_id}/{system_b_id}")
+async def update_type_transformation(system_a_id: int, system_b_id: int, body: TypeTransformationUpdate):
+    """Update type transformation for a system pair"""
+    # Normalize the pair
+    system_a = min(system_a_id, system_b_id)
+    system_b = max(system_a_id, system_b_id)
+    is_swapped = system_a_id != system_a
+    
+    # Get current version
+    current = await fetchrow("""
+        SELECT * FROM control.type_transformations 
+        WHERE system_a_id = $1 AND system_b_id = $2
+    """, system_a, system_b)
+    
+    if not current:
+        raise HTTPException(404, "Type transformation not found")
+    
+    if current['version'] != body.version:
+        raise HTTPException(409, "Version conflict - refresh and try again")
+    
+    # Build update query dynamically based on provided fields
+    # If IDs were swapped, swap which function updates which column
+    updates = []
+    params = []
+    param_idx = 1
+    
+    if body.system_a_function is not None:
+        col = "system_b_function" if is_swapped else "system_a_function"
+        updates.append(f"{col} = ${param_idx}")
+        params.append(body.system_a_function)
+        param_idx += 1
+    
+    if body.system_b_function is not None:
+        col = "system_a_function" if is_swapped else "system_b_function"
+        updates.append(f"{col} = ${param_idx}")
+        params.append(body.system_b_function)
+        param_idx += 1
+    
+    updates.append(f"updated_by = ${param_idx}")
+    params.append(body.updated_by)
+    param_idx += 1
+    
+    updates.append(f"updated_at = now()")
+    updates.append(f"version = version + 1")
+    
+    # Add WHERE clause params
+    params.extend([system_a, system_b])
+    
+    row = await fetchrow(f"""
+        UPDATE control.type_transformations
+        SET {', '.join(updates)}
+        WHERE system_a_id = ${param_idx} AND system_b_id = ${param_idx + 1}
+        RETURNING *
+    """, *params)
+    
+    return dict(row)
+
+@api.delete("/type-transformations/{system_a_id}/{system_b_id}")
+async def delete_type_transformation(system_a_id: int, system_b_id: int):
+    """Delete type transformation for a system pair"""
+    system_a = min(system_a_id, system_b_id)
+    system_b = max(system_a_id, system_b_id)
+    
+    result = await execute("""
+        DELETE FROM control.type_transformations
+        WHERE system_a_id = $1 AND system_b_id = $2
+    """, system_a, system_b)
+    
+    return {"ok": True}
+
+@api.post("/validate-python")
+async def validate_python_code(body: ValidatePythonCode):
+    """Validate Python code syntax and type hints"""
+    import ast
+    import tempfile
+    import subprocess
+    
+    code = body.code
+    errors = []
+    
+    # 1. Syntax validation
+    try:
+        ast.parse(code)
+    except SyntaxError as e:
+        errors.append({
+            "type": "syntax",
+            "message": f"Syntax error at line {e.lineno}: {e.msg}",
+            "line": e.lineno
+        })
+        return {"valid": False, "errors": errors}
+    
+    # 2. Check for function definition
+    try:
+        tree = ast.parse(code)
+        functions = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
+        
+        if not functions:
+            errors.append({
+                "type": "structure",
+                "message": "No function definition found. Must define a function named 'transform_columns'.",
+                "line": 1
+            })
+        else:
+            func = functions[0]
+            if func.name != "transform_columns":
+                errors.append({
+                    "type": "structure",
+                    "message": f"Function must be named 'transform_columns', found '{func.name}'",
+                    "line": func.lineno
+                })
+            
+            # Check function signature
+            if len(func.args.args) != 2:
+                errors.append({
+                    "type": "signature",
+                    "message": "Function must accept exactly 2 parameters: (column_name: str, data_type: str)",
+                    "line": func.lineno
+                })
+    except Exception as e:
+        errors.append({
+            "type": "validation",
+            "message": f"Validation error: {str(e)}",
+            "line": 1
+        })
+    
+    # 3. Type checking with mypy (optional, only if no syntax errors)
+    if not errors:
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+                f.write(code)
+                f.flush()
+                temp_path = f.name
+            
+            result = subprocess.run(
+                ['mypy', '--strict', '--no-error-summary', temp_path],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if result.returncode != 0:
+                # Parse mypy output
+                for line in result.stdout.split('\n'):
+                    if line.strip() and ':' in line:
+                        parts = line.split(':', 3)
+                        if len(parts) >= 4:
+                            try:
+                                line_num = int(parts[1])
+                                message = parts[3].strip()
+                                errors.append({
+                                    "type": "type_hint",
+                                    "message": message,
+                                    "line": line_num
+                                })
+                            except (ValueError, IndexError):
+                                pass
+            
+            os.unlink(temp_path)
+        except subprocess.TimeoutExpired:
+            errors.append({
+                "type": "timeout",
+                "message": "Type checking timed out",
+                "line": 1
+            })
+        except FileNotFoundError:
+            # mypy not installed, skip type checking
+            pass
+        except Exception as e:
+            # Don't fail validation if mypy check fails
+            pass
+    
+    return {
+        "valid": len(errors) == 0,
+        "errors": errors
+    }
 
 # ---------- Worker Helper Endpoints ----------
 @api.get("/triggers/next")

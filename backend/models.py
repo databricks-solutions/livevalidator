@@ -202,3 +202,23 @@ class SystemUpdate(BaseModel):
     is_active: Optional[bool] = None
     updated_by: str
     version: int
+
+
+# ---------- Type Transformations ----------
+class TypeTransformationIn(BaseModel):
+    system_a_id: int
+    system_b_id: int
+    system_a_function: str
+    system_b_function: str
+    updated_by: str
+
+
+class TypeTransformationUpdate(BaseModel):
+    system_a_function: Optional[str] = None
+    system_b_function: Optional[str] = None
+    updated_by: str
+    version: int
+
+
+class ValidatePythonCode(BaseModel):
+    code: str

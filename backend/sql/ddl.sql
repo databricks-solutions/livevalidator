@@ -243,3 +243,29 @@ CREATE TABLE control.validation_config (
 INSERT INTO control.validation_config (id, downgrade_unicode, replace_special_char, extra_replace_regex, updated_by)
 VALUES (1, FALSE, ARRAY['7F','?'], E'\\\\.\\\\.\\\\.',  'system')
 ON CONFLICT (id) DO NOTHING;
+
+-- 10) Type transformations for cross-system validations
+CREATE TABLE control.type_transformations (
+  id                BIGSERIAL PRIMARY KEY,
+  system_a_id       BIGINT NOT NULL REFERENCES control.systems(id) ON DELETE CASCADE,
+  system_b_id       BIGINT NOT NULL REFERENCES control.systems(id) ON DELETE CASCADE,
+  system_a_function TEXT NOT NULL,  -- Python function for system A
+  system_b_function TEXT NOT NULL,  -- Python function for system B
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by        TEXT NOT NULL,
+  version           INTEGER NOT NULL DEFAULT 1,
+  
+  -- Prevent self-referential pairs
+  CONSTRAINT different_systems CHECK (system_a_id != system_b_id)
+);
+
+-- Ensure non-directional uniqueness: (1,2) = (2,1)
+-- Using CREATE UNIQUE INDEX instead of inline constraint for compatibility
+CREATE UNIQUE INDEX unique_system_pair ON control.type_transformations (
+  LEAST(system_a_id, system_b_id), 
+  GREATEST(system_a_id, system_b_id)
+);
+
+CREATE INDEX type_transformations_system_a_idx ON control.type_transformations (system_a_id);
+CREATE INDEX type_transformations_system_b_idx ON control.type_transformations (system_b_id);

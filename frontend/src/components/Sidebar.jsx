@@ -7,6 +7,7 @@ export function Sidebar({ view, setView }) {
     'queries': 'Queries',
     'queue': 'Queue',
     'configuration': 'Configs',
+    'type-mappings': 'Type Mappings',
     'schedules': 'Schedules',
     'systems': 'Systems',
     'setup': 'Setup'
@@ -20,7 +21,7 @@ export function Sidebar({ view, setView }) {
           BETA
         </span>
       </div>
-      {['results','tables','queries','queue','configuration','schedules','systems','setup'].map(v => (
+      {['results','tables','queries','queue','configuration','type-mappings','schedules','systems','setup'].map(v => (
         <div
           key={v}
           onClick={() => setView(v)}
