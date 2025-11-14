@@ -168,10 +168,7 @@ def get_column_types(conn: dict, table: str | None = None) -> list[tuple[str, st
             return [(col.name, str(col.dataType)) for col in table_schema.fields]
         case "Teradata":
             query_columns = f"""
-            SELECT ColumnName as column_name, ColumnType as data_type
-            FROM DBC.ColumnsV 
-            WHERE UPPER(DatabaseName) = '{schema.upper()}' 
-            AND UPPER(TableName) = '{tbl.upper()}'
+            HELP COLUMN {schema.upper()}.{tbl.upper()}.*
             """
         case "Netezza" | "SQLServer" | "MySQL" | "Postgres" | "Snowflake":
             query_columns = f"""
