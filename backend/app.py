@@ -87,7 +87,7 @@ async def list_tables(q: str | None = None):
                 ORDER BY finished_at DESC
                 LIMIT 1
             ) vh ON true
-            WHERE d.is_active AND (d.name ILIKE $1 OR $1 = '')
+            WHERE (d.name ILIKE $1 OR $1 = '')
             ORDER BY d.name
         """, f"%{q}%")
     else:
@@ -112,7 +112,6 @@ async def list_tables(q: str | None = None):
                 ORDER BY finished_at DESC
                 LIMIT 1
             ) vh ON true
-            WHERE d.is_active
             ORDER BY d.name
         """)
     return [dict(r) for r in rows]
@@ -278,7 +277,7 @@ async def list_queries(q: str | None = None):
                 ORDER BY finished_at DESC
                 LIMIT 1
             ) vh ON true
-            WHERE cq.is_active AND cq.name ILIKE $1
+            WHERE cq.name ILIKE $1
             ORDER BY cq.name
         """, f"%{q}%")
     else:
@@ -303,7 +302,6 @@ async def list_queries(q: str | None = None):
                 ORDER BY finished_at DESC
                 LIMIT 1
             ) vh ON true
-            WHERE cq.is_active
             ORDER BY cq.name
         """)
     return [dict(r) for r in rows]

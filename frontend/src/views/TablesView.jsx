@@ -79,6 +79,12 @@ export function TablesView({
       });
     }
     
+    // Sort: enabled items first, disabled items last
+    result.sort((a, b) => {
+      if (a.is_active === b.is_active) return 0;
+      return a.is_active ? -1 : 1;
+    });
+    
     return result;
   }, [data, filterText, filterTags]);
 
@@ -113,15 +119,19 @@ export function TablesView({
       const promises = Array.from(selectedIds).map(async (id) => {
         const row = data.find(r => r.id === id);
         if (row) {
-          await fetch(`/api/tables/${id}`, {
+          const response = await fetch(`/api/tables/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              ...row,
               is_active: isActive,
-              version: row.version
+              version: row.version,
+              updated_by: 'user@company.com'
             })
           });
+          if (!response.ok) {
+            const error = await response.json();
+            console.error(`Failed to update table ${id}:`, error);
+          }
         }
       });
       await Promise.all(promises);
@@ -387,6 +397,7 @@ export function TablesView({
                       onChange={(e) => handleSelectAll(e.target.checked)}
                     />
                   </th>
+                  <th className="text-center px-2 py-1.5 text-sm text-gray-300 font-semibold w-12">Status</th>
                   <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold max-w-xs">Table</th>
                   <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold w-32">Last Run</th>
                   <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold w-40">Source</th>
@@ -411,13 +422,22 @@ export function TablesView({
                 return (
                   <tr 
                     key={row.id} 
-                    className={`border-b border-charcoal-300/30 hover:bg-charcoal-400/50 transition-colors ${isSelected ? 'bg-purple-900/20' : ''}`}
+                    className={`border-b border-charcoal-300/30 hover:bg-charcoal-400/50 transition-colors ${
+                      isSelected ? 'bg-purple-900/20' : ''
+                    } ${!row.is_active ? 'opacity-50' : ''}`}
                   >
                     <td className="px-2 py-1 text-sm">
                       <Checkbox
                         checked={isSelected}
                         onChange={(e) => handleSelectRow(row.id, e.target.checked)}
                       />
+                    </td>
+                    <td className="px-2 py-1 text-center">
+                      {row.is_active ? (
+                        <span className="text-green-500 text-lg" title="Active">●</span>
+                      ) : (
+                        <span className="text-gray-600 text-lg" title="Disabled">○</span>
+                      )}
                     </td>
                     <td className="px-2 py-1 text-sm">
                       <div className="flex flex-col gap-0.5">
