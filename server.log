@@ -5198,3 +5198,405 @@ INFO:     Finished server process [55255]
 INFO:     Started server process [56447]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
+[info] Serving SPA from: /Users/dan.zafar/Desktop/NXP/LiveValidator/frontend/dist
+[info] Mounted /assets -> /Users/dan.zafar/Desktop/NXP/LiveValidator/frontend/dist/assets
+INFO:     127.0.0.1:53176 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53176 - "GET /assets/index-c6UF301f.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53178 - "GET /assets/index-D99LzOZ2.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53176 - "GET /assets/favicon-C-Tjp_PN.ico HTTP/1.1" 200 OK
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+INFO:     127.0.0.1:53178 - "GET /api/current_user HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53181 - "GET /api/tables HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53187 - "GET /api/systems HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53187 - "GET /assets/favicon-C-Tjp_PN.ico HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53176 - "GET /api/validation-history?days_back=7&limit=10000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53185 - "GET /api/schedules HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53187 - "GET /api/bindings/table/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53176 - "GET /api/bindings/table/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53187 - "GET /api/bindings/table/4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53185 - "GET /api/bindings/table/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53181 - "GET /api/queue-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53176 - "GET /api/bindings/table/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53178 - "GET /api/triggers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53187 - "GET /api/bindings/table/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53185 - "GET /api/bindings/table/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53183 - "GET /api/queries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53181 - "GET /api/bindings/table/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53176 - "GET /api/bindings/table/9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53176 - "GET /api/bindings/table/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53181 - "GET /api/bindings/table/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53185 - "GET /api/bindings/table/4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53187 - "GET /api/bindings/table/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53178 - "GET /api/bindings/table/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53183 - "GET /api/bindings/table/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53185 - "GET /api/bindings/table/9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53176 - "GET /api/bindings/table/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53181 - "GET /api/bindings/table/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53185 - "GET /api/bindings/compare_query/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53176 - "GET /api/bindings/compare_query/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53183 - "GET /api/bindings/compare_query/4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53181 - "GET /api/bindings/compare_query/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53187 - "GET /api/bindings/compare_query/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53178 - "GET /api/bindings/compare_query/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53185 - "GET /api/bindings/compare_query/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53176 - "GET /api/bindings/compare_query/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53183 - "GET /api/bindings/compare_query/9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53181 - "GET /api/bindings/compare_query/10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53178 - "GET /api/bindings/compare_query/12 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53187 - "GET /api/bindings/compare_query/11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53185 - "GET /api/bindings/compare_query/13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53183 - "GET /api/bindings/compare_query/15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53176 - "GET /api/bindings/compare_query/14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53178 - "GET /api/bindings/compare_query/17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53181 - "GET /api/bindings/compare_query/16 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53187 - "GET /api/bindings/compare_query/18 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53185 - "GET /api/bindings/compare_query/19 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53183 - "GET /api/bindings/compare_query/20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53176 - "GET /api/bindings/compare_query/21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53178 - "GET /api/bindings/compare_query/22 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53181 - "GET /api/bindings/compare_query/23 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53187 - "GET /api/bindings/compare_query/24 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53185 - "GET /api/bindings/compare_query/25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53183 - "GET /api/bindings/compare_query/26 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53183 - "GET /api/admin/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53185 - "GET /api/admin/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53211 - "PUT /api/admin/config/default_user_role?value=CAN_RUN HTTP/1.1" 200 OK
+WARNING:  WatchFiles detected changes in 'backend/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [56447]
+INFO:     Started server process [58767]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+[info] Serving SPA from: /Users/dan.zafar/Desktop/NXP/LiveValidator/frontend/dist
+[info] Mounted /assets -> /Users/dan.zafar/Desktop/NXP/LiveValidator/frontend/dist/assets
+INFO:     127.0.0.1:53239 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53239 - "GET /assets/index-c6UF301f.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53242 - "GET /assets/index-D99LzOZ2.css HTTP/1.1" 200 OK
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+INFO:     127.0.0.1:53239 - "GET /assets/favicon-C-Tjp_PN.ico HTTP/1.1" 200 OK
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+INFO:     127.0.0.1:53249 - "GET /api/schedules HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53250 - "GET /api/systems HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53242 - "GET /api/current_user HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53249 - "GET /api/triggers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53239 - "GET /api/validation-history?days_back=7&limit=10000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53247 - "GET /api/queries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /api/tables HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53242 - "GET /assets/favicon-C-Tjp_PN.ico HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53250 - "GET /api/queue-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53250 - "GET /api/bindings/table/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53239 - "GET /api/bindings/table/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /api/bindings/table/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53247 - "GET /api/bindings/table/4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53249 - "GET /api/bindings/table/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53242 - "GET /api/bindings/table/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53250 - "GET /api/bindings/table/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53239 - "GET /api/bindings/table/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /api/bindings/table/9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /api/bindings/compare_query/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53250 - "GET /api/bindings/compare_query/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53239 - "GET /api/bindings/compare_query/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53242 - "GET /api/bindings/compare_query/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53247 - "GET /api/bindings/compare_query/4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /api/bindings/compare_query/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53249 - "GET /api/bindings/compare_query/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53239 - "GET /api/bindings/compare_query/9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53250 - "GET /api/bindings/compare_query/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53247 - "GET /api/bindings/compare_query/11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53242 - "GET /api/bindings/compare_query/10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53249 - "GET /api/bindings/compare_query/13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /api/bindings/compare_query/12 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53250 - "GET /api/bindings/compare_query/14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53239 - "GET /api/bindings/compare_query/15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53247 - "GET /api/bindings/compare_query/16 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53249 - "GET /api/bindings/compare_query/17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53242 - "GET /api/bindings/compare_query/18 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /api/bindings/compare_query/19 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53250 - "GET /api/bindings/compare_query/20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53239 - "GET /api/bindings/compare_query/21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53247 - "GET /api/bindings/compare_query/22 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53249 - "GET /api/bindings/compare_query/23 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53242 - "GET /api/bindings/compare_query/24 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /api/bindings/compare_query/25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53250 - "GET /api/bindings/compare_query/26 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53287 - "GET /api/validation-history?days_back=7&limit=10000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53296 - "GET /api/validation-history?days_back=7&limit=10000 HTTP/1.1" 200 OK
+WARNING:  WatchFiles detected changes in 'backend/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [58767]
+INFO:     Started server process [58891]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+[info] Serving SPA from: /Users/dan.zafar/Desktop/NXP/LiveValidator/frontend/dist
+[info] Mounted /assets -> /Users/dan.zafar/Desktop/NXP/LiveValidator/frontend/dist/assets
+INFO:     127.0.0.1:53300 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53300 - "GET /assets/index-c6UF301f.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53302 - "GET /assets/index-D99LzOZ2.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53302 - "GET /assets/favicon-C-Tjp_PN.ico HTTP/1.1" 200 OK
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+INFO:     127.0.0.1:53310 - "GET /api/validation-history?days_back=7&limit=10000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53302 - "GET /api/current_user HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53304 - "GET /api/schedules HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53310 - "GET /api/triggers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53300 - "GET /api/tables HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53304 - "GET /assets/favicon-C-Tjp_PN.ico HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53302 - "GET /api/queue-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53309 - "GET /api/systems HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53308 - "GET /api/queries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53300 - "GET /api/bindings/table/4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53304 - "GET /api/bindings/table/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53309 - "GET /api/bindings/table/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53310 - "GET /api/bindings/table/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53302 - "GET /api/bindings/table/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53308 - "GET /api/bindings/table/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53304 - "GET /api/bindings/table/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53308 - "GET /api/bindings/table/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53309 - "GET /api/bindings/table/9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53302 - "GET /api/bindings/table/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53310 - "GET /api/bindings/table/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53300 - "GET /api/bindings/table/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53304 - "GET /api/bindings/table/4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53302 - "GET /api/bindings/table/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53310 - "GET /api/bindings/table/9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53309 - "GET /api/bindings/table/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53308 - "GET /api/bindings/table/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53300 - "GET /api/bindings/table/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53300 - "GET /api/bindings/compare_query/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53302 - "GET /api/bindings/compare_query/4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53308 - "GET /api/bindings/compare_query/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53300 - "GET /api/bindings/compare_query/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53309 - "GET /api/bindings/compare_query/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53310 - "GET /api/bindings/compare_query/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53304 - "GET /api/bindings/compare_query/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53302 - "GET /api/bindings/compare_query/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53308 - "GET /api/bindings/compare_query/9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53300 - "GET /api/bindings/compare_query/10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53310 - "GET /api/bindings/compare_query/12 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53304 - "GET /api/bindings/compare_query/13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53309 - "GET /api/bindings/compare_query/11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53308 - "GET /api/bindings/compare_query/15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53300 - "GET /api/bindings/compare_query/16 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53302 - "GET /api/bindings/compare_query/14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53310 - "GET /api/bindings/compare_query/17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53304 - "GET /api/bindings/compare_query/18 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53309 - "GET /api/bindings/compare_query/19 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53300 - "GET /api/bindings/compare_query/21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53308 - "GET /api/bindings/compare_query/20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53302 - "GET /api/bindings/compare_query/22 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53304 - "GET /api/bindings/compare_query/24 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53310 - "GET /api/bindings/compare_query/23 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53309 - "GET /api/bindings/compare_query/25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53300 - "GET /api/bindings/compare_query/26 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53300 - "GET /api/admin/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53309 - "GET /api/admin/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53376 - "DELETE /api/admin/users/local-admin-test2%40localhost/role HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53376 - "GET /api/admin/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53378 - "GET /api/admin/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53555 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53555 - "GET /assets/index-bm8vbzGv.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53557 - "GET /assets/index-D99LzOZ2.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53557 - "GET /assets/favicon-C-Tjp_PN.ico HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53557 - "GET /api/current_user HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53563 - "GET /api/schedules HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53557 - "GET /api/triggers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53557 - "GET /assets/favicon-C-Tjp_PN.ico HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53564 - "GET /api/systems HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53566 - "GET /api/validation-history?days_back=7&limit=10000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53563 - "GET /api/queue-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53565 - "GET /api/queries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53563 - "GET /api/bindings/compare_query/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53564 - "GET /api/bindings/compare_query/4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53565 - "GET /api/bindings/compare_query/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53566 - "GET /api/bindings/compare_query/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53557 - "GET /api/bindings/compare_query/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53555 - "GET /api/tables HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53563 - "GET /api/bindings/compare_query/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53565 - "GET /api/bindings/compare_query/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53566 - "GET /api/bindings/compare_query/9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53557 - "GET /api/bindings/compare_query/10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53555 - "GET /api/bindings/compare_query/11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53563 - "GET /api/bindings/compare_query/12 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53566 - "GET /api/bindings/compare_query/14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53565 - "GET /api/bindings/compare_query/13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53555 - "GET /api/bindings/compare_query/16 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53557 - "GET /api/bindings/compare_query/15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53563 - "GET /api/bindings/compare_query/17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53565 - "GET /api/bindings/compare_query/19 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53557 - "GET /api/bindings/compare_query/21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53555 - "GET /api/bindings/compare_query/20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53566 - "GET /api/bindings/compare_query/18 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53564 - "GET /api/bindings/compare_query/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53566 - "GET /api/bindings/compare_query/26 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53565 - "GET /api/bindings/compare_query/22 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53557 - "GET /api/bindings/compare_query/24 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53563 - "GET /api/bindings/compare_query/23 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53555 - "GET /api/bindings/compare_query/25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53564 - "GET /api/bindings/table/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53566 - "GET /api/bindings/table/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53557 - "GET /api/bindings/table/4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53565 - "GET /api/bindings/table/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53563 - "GET /api/bindings/table/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53555 - "GET /api/bindings/table/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53564 - "GET /api/bindings/table/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53557 - "GET /api/bindings/table/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53566 - "GET /api/bindings/table/9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53566 - "GET /api/bindings/compare_query/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53557 - "GET /api/bindings/compare_query/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53555 - "GET /api/bindings/compare_query/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53566 - "GET /api/bindings/compare_query/4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53563 - "GET /api/bindings/compare_query/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53564 - "GET /api/bindings/compare_query/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53565 - "GET /api/bindings/compare_query/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53565 - "GET /api/bindings/compare_query/13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53557 - "GET /api/bindings/compare_query/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53566 - "GET /api/bindings/compare_query/10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53563 - "GET /api/bindings/compare_query/12 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53564 - "GET /api/bindings/compare_query/9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53555 - "GET /api/bindings/compare_query/11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53563 - "GET /api/bindings/compare_query/16 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53566 - "GET /api/bindings/compare_query/17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53565 - "GET /api/bindings/compare_query/14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53564 - "GET /api/bindings/compare_query/19 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53563 - "GET /api/bindings/compare_query/20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53557 - "GET /api/bindings/compare_query/15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53555 - "GET /api/bindings/compare_query/18 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53566 - "GET /api/bindings/compare_query/21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53565 - "GET /api/bindings/compare_query/22 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53564 - "GET /api/bindings/compare_query/23 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53563 - "GET /api/bindings/compare_query/24 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53557 - "GET /api/bindings/compare_query/25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53555 - "GET /api/bindings/compare_query/26 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53555 - "GET /api/admin/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53563 - "GET /api/admin/config HTTP/1.1" 200 OK
+WARNING:  WatchFiles detected changes in 'backend/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [58891]
+INFO:     Started server process [60418]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+[info] Serving SPA from: /Users/dan.zafar/Desktop/NXP/LiveValidator/frontend/dist
+[info] Mounted /assets -> /Users/dan.zafar/Desktop/NXP/LiveValidator/frontend/dist/assets
+INFO:     127.0.0.1:53589 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53589 - "GET /assets/index-D99LzOZ2.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53591 - "GET /assets/index-bm8vbzGv.js HTTP/1.1" 200 OK
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+INFO:     127.0.0.1:53589 - "GET /assets/favicon-C-Tjp_PN.ico HTTP/1.1" 200 OK
+🔌 Connecting to database: localhost:5432/postgres
+🔒 SSL enabled: False
+INFO:     127.0.0.1:53597 - "GET /api/queries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53591 - "GET /api/current_user HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53589 - "GET /api/systems HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53597 - "GET /api/validation-history?days_back=7&limit=10000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53598 - "GET /api/schedules HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53599 - "GET /api/triggers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53595 - "GET /api/tables HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53589 - "GET /assets/favicon-C-Tjp_PN.ico HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53595 - "GET /api/bindings/compare_query/4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53597 - "GET /api/bindings/compare_query/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53599 - "GET /api/bindings/compare_query/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53589 - "GET /api/bindings/compare_query/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53598 - "GET /api/bindings/compare_query/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53591 - "GET /api/queue-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53595 - "GET /api/bindings/compare_query/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53597 - "GET /api/bindings/compare_query/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53589 - "GET /api/bindings/compare_query/9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53599 - "GET /api/bindings/compare_query/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53591 - "GET /api/bindings/compare_query/11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53598 - "GET /api/bindings/compare_query/10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53595 - "GET /api/bindings/compare_query/12 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53597 - "GET /api/bindings/compare_query/13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53599 - "GET /api/bindings/compare_query/15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53589 - "GET /api/bindings/compare_query/14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53591 - "GET /api/bindings/compare_query/16 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53598 - "GET /api/bindings/compare_query/17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53595 - "GET /api/bindings/compare_query/18 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53597 - "GET /api/bindings/compare_query/19 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53589 - "GET /api/bindings/compare_query/21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53599 - "GET /api/bindings/compare_query/20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53591 - "GET /api/bindings/compare_query/22 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53598 - "GET /api/bindings/compare_query/23 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53597 - "GET /api/bindings/compare_query/24 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53589 - "GET /api/bindings/compare_query/26 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53595 - "GET /api/bindings/compare_query/25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53599 - "GET /api/bindings/table/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53591 - "GET /api/bindings/table/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53598 - "GET /api/bindings/table/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53597 - "GET /api/bindings/table/4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53589 - "GET /api/bindings/table/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53599 - "GET /api/bindings/table/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53595 - "GET /api/bindings/table/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53591 - "GET /api/bindings/table/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53598 - "GET /api/bindings/table/9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53595 - "GET /api/bindings/compare_query/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53598 - "GET /api/bindings/compare_query/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53589 - "GET /api/bindings/compare_query/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53597 - "GET /api/bindings/compare_query/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53599 - "GET /api/bindings/compare_query/4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53591 - "GET /api/bindings/compare_query/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53598 - "GET /api/bindings/compare_query/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53595 - "GET /api/bindings/compare_query/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53597 - "GET /api/bindings/compare_query/9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53589 - "GET /api/bindings/compare_query/10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53599 - "GET /api/bindings/compare_query/11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53591 - "GET /api/bindings/compare_query/12 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53595 - "GET /api/bindings/compare_query/14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53598 - "GET /api/bindings/compare_query/13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53597 - "GET /api/bindings/compare_query/15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53589 - "GET /api/bindings/compare_query/16 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53599 - "GET /api/bindings/compare_query/17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53595 - "GET /api/bindings/compare_query/19 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53591 - "GET /api/bindings/compare_query/18 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53598 - "GET /api/bindings/compare_query/20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53589 - "GET /api/bindings/compare_query/22 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53597 - "GET /api/bindings/compare_query/21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53599 - "GET /api/bindings/compare_query/23 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53591 - "GET /api/bindings/compare_query/24 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53595 - "GET /api/bindings/compare_query/25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53598 - "GET /api/bindings/compare_query/26 HTTP/1.1" 200 OK

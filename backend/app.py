@@ -35,7 +35,7 @@ _current_user_email: ContextVar[str] = ContextVar("current_user_email", default=
 async def user_email_middleware(request: Request, call_next):
     # For Databricks: use x-forwarded-email header
     # For local dev: default to local-admin@localhost
-    email = request.headers.get("x-forwarded-email", "local-admin@localhost")
+    email = request.headers.get("x-forwarded-email", "local-admin-test@localhost")
     _current_user_email.set(email)
     
     # Auto-create user entry with default role if not exists

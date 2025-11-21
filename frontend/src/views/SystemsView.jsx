@@ -1,5 +1,6 @@
 import React from 'react';
 import { ErrorBox } from '../components/ErrorBox';
+import { useCurrentUser, canManageSystems } from '../App';
 
 export function SystemsView({ 
   data, 
@@ -9,11 +10,21 @@ export function SystemsView({
   onDelete, 
   onClearError 
 }) {
+  const currentUser = useCurrentUser();
+  const canAdd = canManageSystems(currentUser?.role);
+
   return (
     <>
       {error && error.action !== "setup_required" && <ErrorBox message={error.message} onClose={onClearError} />}
       <h2 className="text-2xl font-semibold text-rust-light mb-4">Systems</h2>
-      <button onClick={() => onEdit({})} className="mb-3 px-3 py-2 bg-purple-600 text-gray-100 border-0 rounded-md cursor-pointer hover:bg-purple-500">Add System</button>
+      <button 
+        onClick={() => onEdit({})} 
+        disabled={!canAdd}
+        title={!canAdd ? "Only CAN_MANAGE users can add systems" : "Add a new system"}
+        className="mb-3 px-3 py-2 bg-purple-600 text-gray-100 border-0 rounded-md cursor-pointer hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        Add System
+      </button>
       {loading ? <p className="text-gray-400">Loading…</p> : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {data.map(row => {
