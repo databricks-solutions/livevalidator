@@ -77,7 +77,7 @@ if compare_mode not in ["except_all", "primary_key"]:
     api_call("PUT", f"/api/triggers/{trigger_id}/fail", {
             "status": "error",
             "error_message": error,
-            "error_details": {"type": type(e).__name__}
+            "error_details": {"type": type(error).__name__}
         })
     raise ValueError(error)
 
@@ -89,7 +89,7 @@ if len(replace_special_char) not in (0,2):
     api_call("PUT", f"/api/triggers/{trigger_id}/fail", {
             "status": "error",
             "error_message": error,
-            "error_details": {"type": type(e).__name__}
+            "error_details": {"type": type(error).__name__}
         })
     raise ValueError(error)
 
@@ -435,6 +435,14 @@ try:
     print("Validating counts...")
     count_result: dict[str, int | bool] = validate_counts(src_df, tgt_df)
     result.update(count_result)
+
+    # limit max rows read for validation
+    if src_conn["system"]["max_rows"]:
+        print(f"Limiting source system {source_system_name} for row value check...")
+        src_df: DataFrame = src_df.limit(src_conn["system"]["max_rows"])
+    if tgt_conn["system"]["max_rows"]:
+        print(f"Limiting target system {target_system_name} for row value check...")
+        tgt_df: DataFrame = tgt_df.limit(tgt_conn["system"]["max_rows"])
     
     # Row-level only if counts match AND compare_mode requires it
     if count_result["row_count_match"] and compare_mode == "except_all":
