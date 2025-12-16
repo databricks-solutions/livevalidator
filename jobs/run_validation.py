@@ -360,7 +360,7 @@ def run_pk_compare(src_df: DataFrame, tgt_df: DataFrame, pk: list[str] = pk_colu
     mismatch_df = joined.filter(
         (col("h_lhs") != col("h_rhs")) |
         col("h_lhs").isNull() | col("h_rhs").isNull()
-    )
+    ).drop("h_lhs", "h_rhs", "__hash__")
 
     return mismatch_df
 
@@ -402,7 +402,8 @@ def validate_rows(src_df: DataFrame, tgt_df: DataFrame, exclude: list[str], mode
         row_dict: dict = {k: serialize_value(v) for k, v in row.asDict().items()}
         sample_dicts.append(row_dict)
 
-    print("\n\n".join(str(row) for row in sample_dicts))
+    if diff_count and mode == "except_all":
+        print("\n\n".join(str(row) for row in sample_dicts))
     
     return {
         "rows_different": diff_count,
@@ -461,7 +462,7 @@ try:
     result.update(count_result)
 
     # limit max rows read for validation
-    if src_conn["system"]["max_rows"]:
+    if src_conn["system"]["max_rows"] and count_result["rows_compared"] > src_conn["system"]["max_rows"]:
         print(f"Limiting source system {source_system_name} for row value check...")
         src_df: DataFrame = src_df.limit(src_conn["system"]["max_rows"])
         result["rows_compared"] = src_conn["system"]["max_rows"]
@@ -530,6 +531,50 @@ print("Reporting results...")
 
 serde_result: dict = result.copy()
 if serde_result.get('src_df'):
-    serde_result.pop('src_df')
-    serde_result.pop('tgt_df')
+    src_df = serde_result.pop('src_df')
+    tgt_df = serde_result.pop('tgt_df')
 api_call("POST", "/api/validation-history", serde_result)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## PK Key Mismatch Analysis
+
+# COMMAND ----------
+
+if compare_mode != "primary_key" or result["rows_different"] == 0:
+    dbutils.notebook.exit("Finished")
+
+# COMMAND ----------
+
+sample_pks: DataFrame = spark.createDataFrame(
+    {k: v} 
+    for row in serde_result.get('sample_differences') 
+    for k, v in row.items() if k in pk_columns
+ )
+
+src_sample = [row.asDict() for row in src_df.join(sample_pks, pk_columns).collect()]
+tgt_sample = [row.asDict() for row in tgt_df.join(sample_pks, pk_columns).collect()]
+
+# COMMAND ----------
+
+zipped_samples: zip = zip(
+    sorted(src_sample, key=lambda item: [item[pk] for pk in pk_columns]),
+    sorted(tgt_sample, key=lambda item: [item[pk] for pk in pk_columns])
+)
+
+mismatch_samples: list[dict] = [
+    {**{pk: src[pk] for pk in pk_columns}, **item} 
+    for src, tgt in zipped_samples 
+    for item in [
+        {".system": source_system_name, **{k: v for k, v in src.items() if v != tgt[k]}}, 
+        {".system": target_system_name, **{k: tgt[k] for k, v in src.items() if v != tgt[k]}}
+    ]
+]
+
+mismatch_df: DataFrame = spark.createDataFrame(mismatch_samples).display()
+
+# COMMAND ----------
+
+# also print the plain text representation for whitespace debugging
+print(mismatch_samples)
