@@ -74,8 +74,8 @@ export function UploadCSVModal({ type, systems, schedules, onClose, onUpload }) 
   };
 
   const downloadTemplate = () => {
-    const src = systems[0]?.name || 'SOURCE_SYSTEM';
-    const tgt = systems[1]?.name || systems[0]?.name || 'TARGET_SYSTEM';
+    const src = systems.find(s => s.id === srcSystemId)?.name || 'SOURCE_SYSTEM';
+    const tgt = systems.find(s => s.id === tgtSystemId)?.name || 'TARGET_SYSTEM';
     const sched = schedules[0]?.name || 'SCHEDULE_NAME';
     
     let csv;

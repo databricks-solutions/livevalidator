@@ -1,15 +1,32 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { parseCSV } from '../../utils/csvParser';
 import { tableService, queryService } from '../../services/api';
 
 export function UploadCSVModal({ type, systems, schedules, onClose, onUpload }) {
-  const [srcSystemId, setSrcSystemId] = useState(systems[0]?.id || 1);
-  const [tgtSystemId, setTgtSystemId] = useState(systems[1]?.id || systems[0]?.id || 2);
+  // Use first system's actual ID, no fallback to hardcoded values
+  const [srcSystemId, setSrcSystemId] = useState(() => systems[0]?.id);
+  const [tgtSystemId, setTgtSystemId] = useState(() => systems[1]?.id ?? systems[0]?.id);
   const [file, setFile] = useState(null);
   const [parsed, setParsed] = useState(null);
   const [errors, setErrors] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  
+  // Sync system IDs when systems array changes (handles async loading)
+  useEffect(() => {
+    if (systems.length > 0) {
+      // Only update if current selection is invalid (not in the systems list)
+      const srcExists = systems.some(s => s.id === srcSystemId);
+      const tgtExists = systems.some(s => s.id === tgtSystemId);
+      
+      if (!srcExists) {
+        setSrcSystemId(systems[0].id);
+      }
+      if (!tgtExists) {
+        setTgtSystemId(systems[1]?.id ?? systems[0].id);
+      }
+    }
+  }, [systems]);
   
   const backdropRef = useRef(null);
   const mouseDownTarget = useRef(null);
@@ -34,7 +51,7 @@ export function UploadCSVModal({ type, systems, schedules, onClose, onUpload }) 
     parseCSV(selectedFile, type, schedules, (validRows, validationErrors) => {
       setErrors(validationErrors);
       setParsed(validRows);
-    });
+    }, systems);
   };
 
   const handleDrag = (e) => {
@@ -54,6 +71,31 @@ export function UploadCSVModal({ type, systems, schedules, onClose, onUpload }) 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFileSelect(e.dataTransfer.files[0]);
     }
+  };
+
+  const downloadTemplate = () => {
+    const src = systems.find(s => s.id === srcSystemId)?.name || 'SOURCE_SYSTEM';
+    const tgt = systems.find(s => s.id === tgtSystemId)?.name || 'TARGET_SYSTEM';
+    const sched = schedules[0]?.name || 'SCHEDULE_NAME';
+    
+    let csv;
+    if (type === 'tables') {
+      const headers = ['src_schema','src_table','schedule_name','source','target','name','is_active','compare_mode','pk_columns','watermark_filter','exclude_columns','tags'];
+      const row1 = ['schema_a','table_a',sched,src,tgt,'schema_a.table_a','true','except_all','','','"COL_A,COL_B,COL_C"','"sample_primary,sample_secondary"'];
+      const row2 = ['schema_b','table_b',sched,src,tgt,'schema_b.table_b','true','primary_key','"PK_COL_A,PK_COL_B"',"\"CREATED_AT > CURRENT_DATE - INTERVAL '5' DAY\"",'"COL_X,COL_Y,COL_Z"','sample_primary'];
+      csv = [headers, row1, row2].map(r => r.join(',')).join('\n');
+    } else {
+      const headers = ['sql','schedule_name','source','target','name','is_active','compare_mode','pk_columns','tags'];
+      const row1 = ['"SELECT * FROM schema_a.table_a"',sched,src,tgt,'query_a','true','except_all','','"sample_primary,sample_secondary"'];
+      const row2 = ['"SELECT id, name FROM schema_b.table_b WHERE CREATED_AT > CURRENT_DATE - INTERVAL \'5\' DAY"',sched,src,tgt,'query_b','true','primary_key','id','sample_primary'];
+      csv = [headers, row1, row2].map(r => r.join(',')).join('\n');
+    }
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${type}_template.csv`;
+    a.click();
   };
 
   const handleUpload = async () => {
@@ -94,25 +136,6 @@ export function UploadCSVModal({ type, systems, schedules, onClose, onUpload }) 
         </div>
 
         <div className="px-6 py-4">
-          {/* System Selection */}
-          <div className="mb-6 pb-6 border-b border-charcoal-200">
-            <h4 className="text-rust-light font-semibold mb-3">System Configuration</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-gray-400 text-sm mb-1">Source System</label>
-                <select value={srcSystemId} onChange={e => setSrcSystemId(parseInt(e.target.value))} className="w-full px-3 py-2 bg-charcoal-600 text-gray-200 border border-charcoal-200 rounded-md">
-                  {systems.map(s => <option key={s.id} value={s.id}>{s.name} ({s.kind})</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-gray-400 text-sm mb-1">Target System</label>
-                <select value={tgtSystemId} onChange={e => setTgtSystemId(parseInt(e.target.value))} className="w-full px-3 py-2 bg-charcoal-600 text-gray-200 border border-charcoal-200 rounded-md">
-                  {systems.map(s => <option key={s.id} value={s.id}>{s.name} ({s.kind})</option>)}
-                </select>
-              </div>
-            </div>
-          </div>
-
           {/* CSV Format Instructions */}
           <div className="mb-6 pb-6 border-b border-charcoal-200">
             <h4 className="text-rust-light font-semibold mb-3">📋 CSV Format Requirements</h4>
@@ -132,15 +155,17 @@ export function UploadCSVModal({ type, systems, schedules, onClose, onUpload }) 
                   <div>
                     <p className="text-rust-light font-semibold mb-1">🔧 Optional Headers:</p>
                     <ul className="text-gray-400 ml-4 space-y-1 text-xs">
+                      <li><code className="bg-charcoal-700 px-2 py-0.5 rounded text-green-400">source</code> - Source system name (overrides default above)</li>
+                      <li><code className="bg-charcoal-700 px-2 py-0.5 rounded text-green-400">target</code> - Target system name (overrides default above)</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">name</code> - Display name (defaults to src_schema.src_table)</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">tgt_schema</code> - Target schema (defaults to src_schema)</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">tgt_table</code> - Target table (defaults to src_table)</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">is_active</code> - true/false (defaults to true)</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">compare_mode</code> - except_all, union, intersect (defaults to except_all)</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">pk_columns</code> - Comma-separated primary key columns</li>
-                      <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">watermark_column</code> - Watermark column name</li>
-                      <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">include_columns</code> - Comma-separated columns to include</li>
+                      <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">watermark_filter</code> - Optional WHERE clause filter expression</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">exclude_columns</code> - Comma-separated columns to exclude</li>
+                      <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">tags</code> - Comma-separated tags to apply (e.g., "QUAL-8D,production")</li>
                     </ul>
                   </div>
                 </>
@@ -156,20 +181,45 @@ export function UploadCSVModal({ type, systems, schedules, onClose, onUpload }) 
                   <div>
                     <p className="text-rust-light font-semibold mb-1">🔧 Optional Headers:</p>
                     <ul className="text-gray-400 ml-4 space-y-1 text-xs">
+                      <li><code className="bg-charcoal-700 px-2 py-0.5 rounded text-green-400">source</code> - Source system name (overrides default above)</li>
+                      <li><code className="bg-charcoal-700 px-2 py-0.5 rounded text-green-400">target</code> - Target system name (overrides default above)</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">name</code> - Display name (defaults to "Query [row#]")</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">is_active</code> - true/false (defaults to true)</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">compare_mode</code> - except_all, primary_key (defaults to except_all)</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">pk_columns</code> - Comma-separated primary key columns (used if compare_mode is 'primary_key')</li>
+                      <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">tags</code> - Comma-separated tags to apply (e.g., "QUAL-8D,production")</li>
                     </ul>
                   </div>
                 </>
               )}
               
-              <div className="mt-3 pt-3 border-t border-charcoal-400">
-                <p className="text-gray-500 text-xs">
-                  💡 <strong>Tips:</strong> Array fields (pk_columns, include_columns, exclude_columns) should be comma-separated within the CSV cell. 
-                  Existing records with matching names will be updated.
+              <div className="mt-4 pt-4 border-t border-charcoal-400">
+                <button onClick={downloadTemplate} className="w-full py-3 text-sm font-semibold bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-lg hover:from-purple-500 hover:to-purple-400 shadow-lg shadow-purple-900/30 transition-all">
+                  📥 Download CSV Template
+                </button>
+                <p className="text-gray-500 text-xs mt-2 text-center">
+                  Pre-filled with your systems & schedules • 2 sample rows included
                 </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Default Systems */}
+          <div className="mb-6 pb-6 border-b border-charcoal-200">
+            <h4 className="text-rust-light font-semibold mb-3">Default Systems</h4>
+            <p className="text-gray-500 text-xs mb-3">Used when CSV rows don't specify <code className="bg-charcoal-700 px-1 rounded">source</code>/<code className="bg-charcoal-700 px-1 rounded">target</code> columns</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-gray-400 text-sm mb-1">Default Source System</label>
+                <select value={srcSystemId} onChange={e => setSrcSystemId(parseInt(e.target.value))} className="w-full px-3 py-2 bg-charcoal-600 text-gray-200 border border-charcoal-200 rounded-md">
+                  {systems.map(s => <option key={s.id} value={s.id}>{s.name} ({s.kind})</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-gray-400 text-sm mb-1">Default Target System</label>
+                <select value={tgtSystemId} onChange={e => setTgtSystemId(parseInt(e.target.value))} className="w-full px-3 py-2 bg-charcoal-600 text-gray-200 border border-charcoal-200 rounded-md">
+                  {systems.map(s => <option key={s.id} value={s.id}>{s.name} ({s.kind})</option>)}
+                </select>
               </div>
             </div>
           </div>
@@ -215,35 +265,39 @@ export function UploadCSVModal({ type, systems, schedules, onClose, onUpload }) 
           )}
 
           {/* Preview */}
-          {parsed && parsed.length > 0 && errors.length === 0 && (
-            <div className="mb-6">
-              <h4 className="text-rust-light font-semibold mb-3">✅ Preview ({parsed.length} rows)</h4>
-              <div className="bg-charcoal-600 rounded-md p-4 max-h-96 overflow-auto">
-                <table className="w-full text-sm text-gray-200">
-                  <thead className="text-gray-400 border-b border-charcoal-200">
-                    <tr>
-                      <th className="text-left p-2">Row</th>
-                      {Object.keys(parsed[0] || {}).map(key => (
-                        <th key={key} className="text-left p-2">{key}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {parsed.map((row, i) => (
-                      <tr key={i} className="border-b border-charcoal-300/30">
-                        <td className="p-2">{i + 1}</td>
-                        {Object.keys(parsed[0] || {}).map(key => (
-                          <td key={key} className="p-2 max-w-xs truncate" title={row[key]}>
-                            {Array.isArray(row[key]) ? row[key].join(', ') : row[key]}
-                          </td>
-                        ))}
+          {parsed && parsed.length > 0 && errors.length === 0 && (() => {
+            const knownCols = type === 'tables'
+              ? ['name','src_schema','src_table','schedule_name','source','target','src_system_name','tgt_system_name','tgt_schema','tgt_table','is_active','compare_mode','pk_columns','watermark_filter','exclude_columns','tags']
+              : ['name','sql','schedule_name','source','target','src_system_name','tgt_system_name','is_active','compare_mode','pk_columns','tags'];
+            const cols = knownCols.filter(c => parsed[0]?.hasOwnProperty(c));
+            return (
+              <div className="mb-6">
+                <h4 className="text-rust-light font-semibold mb-3">✅ Preview ({parsed.length} rows)</h4>
+                <div className="bg-charcoal-600 rounded-md p-4 max-h-96 overflow-auto">
+                  <table className="w-full text-sm text-gray-200">
+                    <thead className="text-gray-400 border-b border-charcoal-200">
+                      <tr>
+                        <th className="text-left p-2">Row</th>
+                        {cols.map(key => <th key={key} className="text-left p-2">{key}</th>)}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {parsed.map((row, i) => (
+                        <tr key={i} className="border-b border-charcoal-300/30">
+                          <td className="p-2">{i + 1}</td>
+                          {cols.map(key => (
+                            <td key={key} className="p-2 max-w-xs truncate" title={String(row[key] ?? '')}>
+                              {Array.isArray(row[key]) ? row[key].join(', ') : (row[key] ?? '')}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
 
         <div className="sticky bottom-0 bg-charcoal-500 px-6 py-4 border-t border-charcoal-200 flex justify-end gap-3">
@@ -260,4 +314,3 @@ export function UploadCSVModal({ type, systems, schedules, onClose, onUpload }) 
     </div>
   );
 }
-
