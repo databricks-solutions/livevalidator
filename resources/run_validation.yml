@@ -32,6 +32,8 @@ resources:
           default: ""
         - name: sql
           default: ""
+        - name: watermark_expr
+          default: ""
         - name: compare_mode
           default: "except_all"
         - name: pk_columns

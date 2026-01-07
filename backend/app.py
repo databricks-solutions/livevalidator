@@ -327,6 +327,22 @@ async def bulk_create_tables(body: BulkTableRequest):
             tgt_schema = item.tgt_schema or item.src_schema
             tgt_table = item.tgt_table or item.src_table
             
+            # Resolve system IDs - per-row system names override request-level IDs
+            src_system_id = body.src_system_id
+            tgt_system_id = body.tgt_system_id
+            
+            if item.src_system_name:
+                src_sys = await fetchrow("SELECT id FROM control.systems WHERE name = $1", item.src_system_name)
+                if not src_sys:
+                    raise ValueError(f"Source system '{item.src_system_name}' not found")
+                src_system_id = src_sys['id']
+            
+            if item.tgt_system_name:
+                tgt_sys = await fetchrow("SELECT id FROM control.systems WHERE name = $1", item.tgt_system_name)
+                if not tgt_sys:
+                    raise ValueError(f"Target system '{item.tgt_system_name}' not found")
+                tgt_system_id = tgt_sys['id']
+            
             # Check if exists
             existing = await fetchrow("SELECT id, version FROM control.datasets WHERE name=$1", name)
             
@@ -352,8 +368,8 @@ async def bulk_create_tables(body: BulkTableRequest):
                     WHERE id=$1
                     RETURNING *
                 """,
-                existing['id'], body.src_system_id, item.src_schema, item.src_table,
-                body.tgt_system_id, tgt_schema, tgt_table,
+                existing['id'], src_system_id, item.src_schema, item.src_table,
+                tgt_system_id, tgt_schema, tgt_table,
                 item.compare_mode, item.pk_columns, item.watermark_filter,
                 item.include_columns or [], item.exclude_columns or [],
                 item.is_active, user_email)
@@ -371,8 +387,8 @@ async def bulk_create_tables(body: BulkTableRequest):
                       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14
                     ) RETURNING *
                 """,
-                name, body.src_system_id, item.src_schema, item.src_table,
-                body.tgt_system_id, tgt_schema, tgt_table,
+                name, src_system_id, item.src_schema, item.src_table,
+                tgt_system_id, tgt_schema, tgt_table,
                 item.compare_mode, item.pk_columns, item.watermark_filter,
                 item.include_columns or [], item.exclude_columns or [],
                 item.is_active, user_email)
@@ -385,6 +401,23 @@ async def bulk_create_tables(body: BulkTableRequest):
                         VALUES ($1, 'table', $2)
                         ON CONFLICT DO NOTHING
                     """, schedule['id'], row['id'])
+                
+                # Apply tags if provided
+                if item.tags:
+                    for tag_name in item.tags:
+                        tag_name = tag_name.strip()
+                        if not tag_name:
+                            continue
+                        # Get or create tag
+                        tag = await fetchrow("SELECT id FROM control.tags WHERE name = $1", tag_name)
+                        if not tag:
+                            tag = await fetchrow("INSERT INTO control.tags (name) VALUES ($1) RETURNING id", tag_name)
+                        # Associate tag with entity
+                        await execute("""
+                            INSERT INTO control.entity_tags (entity_type, entity_id, tag_id)
+                            VALUES ('table', $1, $2)
+                            ON CONFLICT DO NOTHING
+                        """, row['id'], tag['id'])
                 
                 results["created"].append({"row": idx + 1, "name": name, "data": dict(row)})
         except Exception as e:
@@ -523,6 +556,22 @@ async def bulk_create_queries(body: BulkQueryRequest):
             # Apply defaults
             name = item.name or f"Query {idx + 1}"
             
+            # Resolve system IDs - per-row system names override request-level IDs
+            src_system_id = body.src_system_id
+            tgt_system_id = body.tgt_system_id
+            
+            if item.src_system_name:
+                src_sys = await fetchrow("SELECT id FROM control.systems WHERE name = $1", item.src_system_name)
+                if not src_sys:
+                    raise ValueError(f"Source system '{item.src_system_name}' not found")
+                src_system_id = src_sys['id']
+            
+            if item.tgt_system_name:
+                tgt_sys = await fetchrow("SELECT id FROM control.systems WHERE name = $1", item.tgt_system_name)
+                if not tgt_sys:
+                    raise ValueError(f"Target system '{item.tgt_system_name}' not found")
+                tgt_system_id = tgt_sys['id']
+            
             # Check if exists
             existing = await fetchrow("SELECT id, version FROM control.compare_queries WHERE name=$1", name)
             
@@ -543,7 +592,7 @@ async def bulk_create_queries(body: BulkQueryRequest):
                     WHERE id=$1
                     RETURNING *
                 """,
-                existing['id'], body.src_system_id, item.sql, body.tgt_system_id,
+                existing['id'], src_system_id, item.sql, tgt_system_id,
                 item.compare_mode, item.pk_columns, item.watermark_filter,
                 item.is_active, user_email)
                 results["updated"].append({"row": idx + 1, "name": name, "data": dict(row)})
@@ -558,7 +607,7 @@ async def bulk_create_queries(body: BulkQueryRequest):
                       $1,$2,$3,$4,$5,$6,$7,$8,$9,$9
                     ) RETURNING *
                 """,
-                name, body.src_system_id, item.sql, body.tgt_system_id,
+                name, src_system_id, item.sql, tgt_system_id,
                 item.compare_mode, item.pk_columns, item.watermark_filter,
                 item.is_active, user_email)
                 
@@ -570,6 +619,23 @@ async def bulk_create_queries(body: BulkQueryRequest):
                         VALUES ($1, 'compare_query', $2)
                         ON CONFLICT DO NOTHING
                     """, schedule['id'], row['id'])
+                
+                # Apply tags if provided
+                if item.tags:
+                    for tag_name in item.tags:
+                        tag_name = tag_name.strip()
+                        if not tag_name:
+                            continue
+                        # Get or create tag
+                        tag = await fetchrow("SELECT id FROM control.tags WHERE name = $1", tag_name)
+                        if not tag:
+                            tag = await fetchrow("INSERT INTO control.tags (name) VALUES ($1) RETURNING id", tag_name)
+                        # Associate tag with entity
+                        await execute("""
+                            INSERT INTO control.entity_tags (entity_type, entity_id, tag_id)
+                            VALUES ('query', $1, $2)
+                            ON CONFLICT DO NOTHING
+                        """, row['id'], tag['id'])
                 
                 results["created"].append({"row": idx + 1, "name": name, "data": dict(row)})
         except Exception as e:
@@ -977,7 +1043,7 @@ async def create_validation_history(body: dict):
     # Get missing fields from trigger if not provided by job 
     trigger = await fetchrow("SELECT databricks_run_url, databricks_run_id, entity_id, requested_at FROM control.triggers WHERE id=$1", body['trigger_id'])
     if not trigger:
-        raise Exception(f"Trigger '{body['trigger_id']}' not found")
+        raise HTTPException(status_code=404, detail=f"Trigger '{body['trigger_id']}' not found")
 
     databricks_run_url = body.get('databricks_run_url') or trigger['databricks_run_url']
     databricks_run_id = body.get('databricks_run_id') or trigger['databricks_run_id']
@@ -1472,7 +1538,7 @@ async def get_next_trigger(worker_id: str = "worker-default"):
     if row["entity_type"] == 'table':
         result["source_table"] = f"{entity['src_schema'].strip()}.{entity['src_table'].strip()}"
         result["target_table"] = f"{entity['tgt_schema'].strip()}.{entity['tgt_table'].strip()}"
-
+    result["watermark_expr"] = entity['watermark_filter']
     result["src_system_name"] = src_source_info["name"]
     result["tgt_system_name"] = tgt_source_info["name"]
     

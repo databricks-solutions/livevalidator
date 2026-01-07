@@ -211,6 +211,7 @@ def process_next_trigger(running_per_system: dict[int, int]) -> bool:
             "source_table": trigger.get("source_table", "") if is_table else "",
             "target_table": trigger.get("target_table", "") if is_table else "",
             "sql": trigger.get("sql", "") if not is_table else "",
+            "watermark_expr": trigger.get("watermark_expr", ""),
             "compare_mode": trigger.get("compare_mode", "except_all"),
             "pk_columns": json.dumps(trigger.get("pk_columns") or []),
             "include_columns": json.dumps(trigger.get("include_columns") or []),

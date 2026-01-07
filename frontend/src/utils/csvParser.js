@@ -3,12 +3,12 @@ import Papa from 'papaparse';
 /**
  * Parse CSV file and validate based on type
  */
-export function parseCSV(file, type, schedules, onComplete) {
+export function parseCSV(file, type, schedules, onComplete, systems = []) {
   Papa.parse(file, {
     header: true,
     skipEmptyLines: true,
     complete: (results) => {
-      const { validRows, errors } = validateCSVData(results.data, type, schedules);
+      const { validRows, errors } = validateCSVData(results.data, type, schedules, systems);
       onComplete(validRows, errors);
     },
     error: (err) => {
@@ -20,7 +20,7 @@ export function parseCSV(file, type, schedules, onComplete) {
 /**
  * Validate CSV data based on type
  */
-function validateCSVData(data, type, schedules) {
+function validateCSVData(data, type, schedules, systems) {
   const validationErrors = [];
   const validRows = [];
   
@@ -39,6 +39,20 @@ function validateCSVData(data, type, schedules) {
         rowErrors.push(`Schedule '${row.schedule_name}' not found`);
       }
       
+      // Get source/target system names (support multiple column name variants)
+      const srcSystemName = row.source || row.src_system || row.src_system_name || null;
+      const tgtSystemName = row.target || row.tgt_system || row.tgt_system_name || null;
+      
+      // Validate source system if specified
+      if (srcSystemName && systems.length > 0 && !systems.find(s => s.name === srcSystemName)) {
+        rowErrors.push(`Source system '${srcSystemName}' not found`);
+      }
+      
+      // Validate target system if specified
+      if (tgtSystemName && systems.length > 0 && !systems.find(s => s.name === tgtSystemName)) {
+        rowErrors.push(`Target system '${tgtSystemName}' not found`);
+      }
+      
       if (rowErrors.length === 0) {
         validRows.push({
           ...row,
@@ -49,6 +63,10 @@ function validateCSVData(data, type, schedules) {
           pk_columns: row.pk_columns ? row.pk_columns.split(',').map(s => s.trim()) : null,
           include_columns: row.include_columns ? row.include_columns.split(',').map(s => s.trim()) : [],
           exclude_columns: row.exclude_columns ? row.exclude_columns.split(',').map(s => s.trim()) : [],
+          tags: row.tags ? row.tags.split(',').map(s => s.trim()).filter(s => s) : [],
+          // Pass through system names for backend to resolve
+          src_system_name: srcSystemName,
+          tgt_system_name: tgtSystemName,
         });
       }
     } else if (type === 'queries') {
@@ -61,6 +79,20 @@ function validateCSVData(data, type, schedules) {
         rowErrors.push(`Schedule '${row.schedule_name}' not found`);
       }
       
+      // Get source/target system names (support multiple column name variants)
+      const srcSystemName = row.source || row.src_system || row.src_system_name || null;
+      const tgtSystemName = row.target || row.tgt_system || row.tgt_system_name || null;
+      
+      // Validate source system if specified
+      if (srcSystemName && systems.length > 0 && !systems.find(s => s.name === srcSystemName)) {
+        rowErrors.push(`Source system '${srcSystemName}' not found`);
+      }
+      
+      // Validate target system if specified
+      if (tgtSystemName && systems.length > 0 && !systems.find(s => s.name === tgtSystemName)) {
+        rowErrors.push(`Target system '${tgtSystemName}' not found`);
+      }
+      
       if (rowErrors.length === 0) {
         validRows.push({
           ...row,
@@ -69,6 +101,10 @@ function validateCSVData(data, type, schedules) {
           pk_columns: row.pk_columns ? row.pk_columns.split(',').map(s => s.trim()) : null,
           include_columns: row.include_columns ? row.include_columns.split(',').map(s => s.trim()) : [],
           exclude_columns: row.exclude_columns ? row.exclude_columns.split(',').map(s => s.trim()) : [],
+          tags: row.tags ? row.tags.split(',').map(s => s.trim()).filter(s => s) : [],
+          // Pass through system names for backend to resolve
+          src_system_name: srcSystemName,
+          tgt_system_name: tgtSystemName,
         });
       }
     }

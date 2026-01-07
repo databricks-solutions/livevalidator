@@ -54,6 +54,10 @@ class BulkTableItem(BaseModel):
     include_columns: Optional[list[str]] = None
     exclude_columns: Optional[list[str]] = None
     is_active: Optional[bool] = True
+    tags: Optional[list[str]] = None
+    # Per-row system override (by name) - if provided, overrides the request-level system IDs
+    src_system_name: Optional[str] = None
+    tgt_system_name: Optional[str] = None
 
 
 class BulkTableRequest(BaseModel):
@@ -96,6 +100,10 @@ class BulkQueryItem(BaseModel):
     pk_columns: Optional[list[str]] = None
     watermark_filter: Optional[str] = None
     is_active: Optional[bool] = True
+    tags: Optional[list[str]] = None
+    # Per-row system override (by name) - if provided, overrides the request-level system IDs
+    src_system_name: Optional[str] = None
+    tgt_system_name: Optional[str] = None
 
 
 class BulkQueryRequest(BaseModel):

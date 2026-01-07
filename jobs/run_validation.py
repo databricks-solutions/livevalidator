@@ -33,6 +33,7 @@ dbutils.widgets.text("backend_api_url", "")
 dbutils.widgets.text("source_table", "")
 dbutils.widgets.text("target_table", "")
 dbutils.widgets.text("sql", "")
+dbutils.widgets.text("watermark_expr", "")
 dbutils.widgets.text("compare_mode", "except_all")
 dbutils.widgets.text("pk_columns", "")
 dbutils.widgets.text("include_columns", "[]")
@@ -53,6 +54,7 @@ backend_api_url: str = dbutils.widgets.get("backend_api_url")
 source_table: str | None = dbutils.widgets.get("source_table") or None
 target_table: str | None = dbutils.widgets.get("target_table") or None
 sql: str | None = dbutils.widgets.get("sql") or None
+watermark_expr: str | None = dbutils.widgets.get("watermark_expr") or None
 compare_mode: str = dbutils.widgets.get("compare_mode")
 pk_columns: list[str] = [c for c in json.loads(dbutils.widgets.get("pk_columns") or "[]") if c]
 include_columns: list[str] = [c for c in json.loads(dbutils.widgets.get("include_columns") or "[]") if c]
@@ -106,7 +108,8 @@ def get_connection_info(system_name: str) -> dict:
             case "Teradata":
                jdbc_str = f"jdbc:{system['kind'].lower()}://{system['host']}"
             case _:
-               jdbc_str = f"jdbc:{system['kind'].lower()}://{system['host']}:{system['port']}/{system['database']}"
+               jdbc_str = f"jdbc:{system['kind'].lower()}://{system['host']}:{system['port']};database={system['database']}"
+        print(f"Generated {system["kind"]} connection string: {jdbc_str}")
 
     return {
         "type": "jdbc",
@@ -201,11 +204,20 @@ def generate_read_query(conn: dict, table: str, type_mapping_func: str) -> str:
     cast_columns: list[str] = [transform_columns(name, data_type) for name, data_type in col_types] if len(col_types) > 0 else ["*"]
     return f"SELECT {', '.join(cast_columns)} FROM {table}"
 
-def read_data(conn: dict, table: str | None = None, query: str | None = None, type_mapping_func: str | None = None) -> DataFrame:
+def read_data(
+    conn: dict, 
+    table: str | None = None, 
+    query: str | None = None, 
+    watermark_expr: str | None = None, 
+    type_mapping_func: str | None = None
+    ) -> DataFrame:
+
     """Read data from system"""
     is_databricks: bool = conn["system"]["kind"] == "Databricks"
 
     if query:
+        if watermark_expr:
+            print(f"Ignoring watermark expression for 'query' entity: {watermark_expr}")
         if is_databricks:
             if conn["type"] == "catalog":
                 spark.sql(f"USE CATALOG `{conn['catalog']}`;")
@@ -217,7 +229,8 @@ def read_data(conn: dict, table: str | None = None, query: str | None = None, ty
     if is_databricks:
         table: str = f"`{conn['catalog']}`.{table}"
 
-    read_query = generate_read_query(conn, table, type_mapping_func) if type_mapping_func.strip() else f"SELECT * FROM {table}"
+    watermark_expr = f" WHERE {watermark_expr}" if watermark_expr else ""
+    read_query = generate_read_query(conn, table, type_mapping_func) if type_mapping_func.strip() else f"SELECT * FROM {table}{watermark_expr}"
     
     if is_databricks:
         return spark.sql(read_query) 
@@ -450,8 +463,8 @@ try:
     # Read data
     print("Reading data...")
     src_xform_func, tgt_xform_func = get_type_transformations(src_conn["system"]["id"], tgt_conn["system"]["id"])
-    src_df: DataFrame = read_data(src_conn, table=source_table, query=sql, type_mapping_func=src_xform_func)
-    tgt_df: DataFrame = read_data(tgt_conn, table=target_table, query=sql, type_mapping_func=tgt_xform_func)
+    src_df: DataFrame = read_data(src_conn, table=source_table, query=sql, watermark_expr=watermark_expr, type_mapping_func=src_xform_func)
+    tgt_df: DataFrame = read_data(tgt_conn, table=target_table, query=sql, watermark_expr=watermark_expr, type_mapping_func=tgt_xform_func)
     
     # Validate
     print("Validating schema...")
@@ -542,7 +555,7 @@ api_call("POST", "/api/validation-history", serde_result)
 
 # COMMAND ----------
 
-if compare_mode != "primary_key" or result["rows_different"] == 0:
+if compare_mode != "primary_key" or result["rows_different"] == 0 or not result.get('sample_differences'):
     dbutils.notebook.exit("Finished")
 
 # COMMAND ----------
