@@ -1,33 +1,23 @@
 bundle:
   name: LiveValidator
 
-include:
-  - resources/*.yml
+# resources:
+#   apps:
+#     live-validator:
+#       name: live-validator
+#       source_code_path: /Workspace/Users/dan.zafar@nxp.com/live-validator
+#       resources:
+#         - name: run_validation
+#           job:
+#             id: ${resources.jobs.run_validation.id}
+#         - name: job_sentinel
+#           job:
+#             id: ${resources.jobs.job_sentinel.id}
 
-resources:
-  apps:
-    live_validator:
-      name: live-validator
-      description: Compare tables or query results across systems
-      source_code_path: src/app
-      resources:
-        - name: postgres
-          database:
-            database_name: databricks_postgres
-            instance_name: ${resources.database_instances.live_validator_database.name}
-            permission: CAN_CONNECT_AND_CREATE
-
-  database_instances:
-    live_validator_database:
-      name: live-validator
-      enable_pg_native_login: true
-      capacity: CU_1
-  database_catalogs:
-    live_validator_catalog:
-      database_instance_name: ${resources.database_instances.live_validator_database.name}
-      name: live_validator
-      database_name: databricks_postgres
-      create_database_if_not_exists: true
+variables:
+  backend_api_url:
+    description: "URL of the LiveValidator backend API"
+    default: "https://live-validator-2263248446072504.aws.databricksapps.com"
 
 targets:
   
@@ -36,6 +26,8 @@ targets:
     mode: production
     workspace:
       host: https://dbc-d723fd35-120a.cloud.databricks.com/
+    variables:
+      backend_api_url: "https://live-validator-2263248446072504.aws.databricksapps.com"
     workspace:
       root_path: /Workspace/LiveValidator
     permissions:
@@ -73,3 +65,6 @@ targets:
               level: CAN_ATTACH_TO
             - group_name: 1dp-migration-prd-admin
               level: CAN_MANAGE
+
+include:
+  - resources/*.yml

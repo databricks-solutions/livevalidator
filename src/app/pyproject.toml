@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "livevalidator"
+version = "0.0.1"
+description = "Coontrol-plane web app for LiveValidator"
+authors = [
+  { name="Dan Zafar", email="dan.zafar@nxp.com" }
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "asyncpg",
+    "python-dotenv"
+]
+
+[tool.setuptools.packages.find]
+where = ["backend"]

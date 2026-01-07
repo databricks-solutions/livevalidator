@@ -8,7 +8,7 @@ resources:
           notebook_task:
             notebook_path: ../jobs/run_validation.py
             base_parameters:
-              backend_api_url: ${resources.apps.live_validator.url}
+              backend_api_url: ${var.backend_api_url}
           timeout_seconds: 3600
           disable_auto_optimization: true
           existing_cluster_id: ${resources.clusters.livevalidator.id}

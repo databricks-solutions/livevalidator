@@ -1,0 +1,49 @@
+resources:
+  jobs:
+    job_sentinel:
+      name: "[LiveValidator] JobSentinel"
+
+#      # Small cluster for long-running orchestrator
+#      job_clusters:
+#        - job_cluster_key: orchestrator_cluster
+#          new_cluster:
+#            spark_version: 13.3.x-scala2.12
+#            node_type_id: m5d.large
+#            num_workers: 0  # Single-node cluster
+#            spark_conf:
+#              spark.master: "local[*]"
+#              spark.databricks.cluster.profile: singleNode
+#            custom_tags:
+#              ResourceClass: SingleNode
+      
+      tasks:
+        - task_key: orchestrate
+#          job_cluster_key: orchestrator_cluster
+          notebook_task:
+            notebook_path: ../jobs/job_sentinel.py
+            base_parameters:
+              backend_api_url: ${var.backend_api_url}
+              validation_job_id: ${resources.jobs.run_validation.id}
+              poll_interval: "30"
+          max_retries: -1
+#          environment_key: default
+          
+
+#      environments:
+#        - environment_key: default
+#          spec:
+#            client: '3'
+#            environment_version: '3'
+#            dependencies:
+#              - cronitor
+
+
+      # Run continuously
+#      schedule:
+#        quartz_cron_expression: "0 0 0 * * ?"  # Dummy - job runs continuously
+#        timezone_id: UTC
+#        pause_status: UNPAUSED
+      
+      tags:
+        application: live-validator
+        component: orchestrator
