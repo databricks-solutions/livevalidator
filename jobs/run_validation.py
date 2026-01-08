@@ -17,7 +17,7 @@ from databricks.sdk import WorkspaceClient
 
 # Initialize workspace client for auth
 w: WorkspaceClient = WorkspaceClient(
-    host="https://dbc-d723fd35-120a.cloud.databricks.com",
+    host=spark.conf.get('spark.databricks.workspaceUrl'),
     client_id=dbutils.secrets.get(scope = "livevalidator", key = "lv-app-id"),
     client_secret=dbutils.secrets.get(scope = "livevalidator", key = "lv-app-secret")
     )
