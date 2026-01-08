@@ -62,9 +62,7 @@ app.add_middleware(
 # ---------- Global Exception Handlers ----------
 @app.exception_handler(asyncpg.exceptions.UndefinedTableError)
 async def handle_undefined_table(request: Request, exc: asyncpg.exceptions.UndefinedTableError):
-    """
-    Catch database table not found errors and direct user to setup.
-    """
+    """Catch database table not found errors and direct user to setup."""
     return JSONResponse(
         status_code=503,
         content={
@@ -72,7 +70,81 @@ async def handle_undefined_table(request: Request, exc: asyncpg.exceptions.Undef
             "action": "setup_required",
             "message": "Please go to the Setup tab and click 'Initialize Database'"
         }
-)
+    )
+
+@app.exception_handler(asyncpg.exceptions.UndefinedObjectError)
+async def handle_undefined_object(request: Request, exc: asyncpg.exceptions.UndefinedObjectError):
+    """Catch missing role/object errors (e.g., 'role apprunner does not exist')."""
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Database role not configured",
+            "action": "setup_required",
+            "message": f"Database setup required: {exc}. Please ensure the database role exists (run grants.sql)."
+        }
+    )
+
+@app.exception_handler(asyncpg.exceptions.InvalidCatalogNameError)
+async def handle_invalid_catalog(request: Request, exc: asyncpg.exceptions.InvalidCatalogNameError):
+    """Catch database doesn't exist errors."""
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Database not found",
+            "action": "setup_required",
+            "message": f"Database setup required: {exc}. Please ensure the database exists."
+        }
+    )
+
+@app.exception_handler(asyncpg.exceptions.InvalidPasswordError)
+async def handle_invalid_password(request: Request, exc: asyncpg.exceptions.InvalidPasswordError):
+    """Catch authentication errors."""
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Database authentication failed",
+            "action": "setup_required",
+            "message": "Database authentication failed. Please check DB_DSN credentials."
+        }
+    )
+
+@app.exception_handler(asyncpg.exceptions.CannotConnectNowError)
+async def handle_cannot_connect(request: Request, exc: asyncpg.exceptions.CannotConnectNowError):
+    """Catch connection errors."""
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Cannot connect to database",
+            "action": "setup_required", 
+            "message": f"Cannot connect to database: {exc}. Please check database availability."
+        }
+    )
+
+@app.exception_handler(asyncpg.exceptions.PostgresConnectionError)
+async def handle_postgres_connection_error(request: Request, exc: asyncpg.exceptions.PostgresConnectionError):
+    """Catch-all for postgres connection errors."""
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Database connection error",
+            "action": "setup_required",
+            "message": f"Database connection error: {exc}. Please check database configuration."
+        }
+    )
+
+@app.exception_handler(OSError)
+async def handle_os_error(request: Request, exc: OSError):
+    """Catch network/OS errors (connection refused, host unreachable, etc.)."""
+    if "Connect call failed" in str(exc) or "Connection refused" in str(exc):
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": "Cannot reach database server",
+                "action": "setup_required",
+                "message": f"Cannot reach database server: {exc}. Please check network connectivity and database host."
+            }
+        )
+    raise exc  # Re-raise if not a connection error
 
 # ---------- Helpers ----------
 def get_user_email() -> str:

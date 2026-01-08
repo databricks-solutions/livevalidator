@@ -21,17 +21,4 @@ resources:
     job:
       id: ${resources.jobs.job_sentinel.id}
       permission: CAN_MANAGE_RUN
-
-env:
-  # Database Configuration
-  # Update these values in the Databricks Apps UI under Environment Variables
-  - name: DB_DSN
-    value: "postgresql://apprunner:beepboop123@instance-bbdc66b7-47d1-48a0-b2bd-20992dfca609.database.cloud.databricks.com:5432/databricks_postgres"
   
-  - name: DB_USE_SSL
-    value: "true"
-  
-  # DB_SSL_CA_FILE: Optional. Leave unset to use system default certificates.
-  # Only needed if you have a custom CA certificate file.
-  # - name: DB_SSL_CA_FILE
-  #   value: "path/to/custom-ca.pem"

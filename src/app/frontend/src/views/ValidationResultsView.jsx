@@ -533,7 +533,7 @@ export function ValidationResultsView({ data, loading, error, onClearError, high
               onChange={(e) => handleFilterChange('status', e.target.value)}
               className="px-2 py-1 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm focus:outline-none focus:border-rust-light hover:border-charcoal-100 transition-colors cursor-pointer"
             >
-              <option value="">All Statuses</option>
+              <option value="">All Statuses+</option>
               <option value="succeeded">Succeeded</option>
               <option value="failed">Failed</option>
               <option value="error">Error</option>

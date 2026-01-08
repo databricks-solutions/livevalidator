@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS control.systems (
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   version           INTEGER NOT NULL DEFAULT 1,
-  PRIMARY KEY (id, name)
+  PRIMARY KEY (id)
 );
 
 -- 2) Named table ↔ table comparisons (schema-driven)

@@ -18,8 +18,8 @@ export function Sidebar({ view, setView }) {
   };
 
   const mainViews = ['results','tables','queries','queue','configuration','type-mappings','schedules','systems'];
-  // Only show Admin and Setup to CAN_MANAGE users (must have both currentUser AND role)
-  const bottomViews = (currentUser && currentUser.role === 'CAN_MANAGE') ? ['admin', 'setup'] : [];
+  // Show Admin/Setup to CAN_MANAGE users, OR if currentUser is null (DB not initialized yet)
+  const bottomViews = (!currentUser || currentUser.role === 'CAN_MANAGE') ? ['admin', 'setup'] : [];
 
   return (
     <div className="w-48 border-r border-charcoal-200 py-5 fixed top-0 left-0 bottom-0 flex flex-col bg-charcoal-600">

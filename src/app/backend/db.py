@@ -9,17 +9,20 @@ load_dotenv()
 
 # Database connection configuration
 # Local: Set in .env file
-# Databricks: Set in app.yaml env section or Databricks UI
-DB_DSN = os.getenv("DB_DSN")
-DB_USE_SSL = os.getenv("DB_USE_SSL", "true").lower() == "true"
+# Databricks: Set in the DABs by adding postgres as a App Resource
+PGDATABASE = os.getenv("PGDATABASE")
+PGHOST = os.getenv("PGHOST")
+PGPORT = os.getenv("PGPORT")
+# DB_DSN = os.getenv("DB_DSN")
+DB_DSN = f"postgresql://apprunner:beepboop123@{PGHOST}:{PGPORT}/{PGDATABASE}"
+
+DB_USE_SSL = os.getenv("PGSSLMODE")== "require"
 DB_SSL_CA_FILE = os.getenv("DB_SSL_CA_FILE", "backend/databricks-ca.pem")
 
 # Fallback to Databricks Lakebase if DB_DSN not explicitly set
 # (This is a safety fallback; production should always set DB_DSN)
 if not DB_DSN:
-    print("⚠️  Warning: DB_DSN not set, using hardcoded fallback")
-    DB_DSN = "postgresql://apprunner:beepboop123@instance-bbdc66b7-47d1-48a0-b2bd-20992dfca609.database.cloud.databricks.com:5432/databricks_postgres"
-    DB_USE_SSL = True
+    print("⚠️  Warning: DB_DSN not set, please ensure a LakeBase backend is set up and accessible in app.yml")
 
 pool: asyncpg.Pool | None = None
 

@@ -58,89 +58,85 @@ When differences are found, LiveValidator captures sample records and provides d
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.11+
-- Node.js 18+
-- PostgreSQL 14+ (local or Databricks Lakebase)
+- Setup Databricks CLI to point to your target workspace
+- Lakehouse Apps enabled on your workspace
+- Lakebase enabled on your workspace
+- Elevated/admin priveleges for the deployer
 
 ### Setup
 
-#### 1. Backend Setup
+#### 1. Deploy DAB
 
 ```bash
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -e .
-
-# Configure environment
-cp .env.example .env
-# Edit .env with your database credentials
+databricks bundle deploy -t migr-dev
 ```
 
-#### 2. Database Configuration
-
-**For Local Development:**
-```bash
-# .env file
-DB_DSN=postgresql://postgres:postgres@localhost:5432/livevalidator
-DB_USE_SSL=false
-```
-
-**For Databricks Lakebase:**
-```yaml
-# Edit app.yaml env section:
-env:
-  - name: DB_DSN
-    value: "postgresql://user:pass@instance.database.cloud.databricks.com:5432/databricks_postgres"
-  - name: DB_USE_SSL
-    value: "true"
-  - name: DB_SSL_CA_FILE
-    value: "backend/databricks-ca.pem"
-```
-
-Or set in Databricks UI: **App Configuration → Environment Variables**
-
-#### 3. Initialize Database Schema
+#### 2. Start App
 
 ```bash
-# Run DDL scripts to create tables
-psql -f backend/sql/ddl.sql
-psql -f backend/sql/grants.sql
+# start the app's compute
+databricks apps start live-validator -t migr-dev
+# deploy the app
+databricks apps deploy live-validator --source-code-path /Workspace/LiveValidator/files/src/app -t migr-dev
+```
+Or simply navigate to Compute -> Apps and start it from the UI
+
+#### 3. Navigate to the app
+Inspect the app configuration page under Compute -> Apps
+
+![Compute Apps](docs/images/find-apps.png)
+
+Inspect the configuration and ensure the app has been properly deployed and is running. 
+
+Now navigate the app's url. The URL should look like:
+```
+https://live-validator-<workspace-id>.aws.databricksapps.com/
 ```
 
-#### 4. Frontend Setup
+On first launch, you'll see a banner prompting you to go to the Setup page.
 
-```bash
-cd frontend
-npm install
-npm run dev  # Development server
-npm run build  # Production build
+#### 3. Setup Database
+
+The rest of the setup instructions are located on the app's Setup page, but are included here as well.
+
+Click **"Go to Setup →"** to proceed with database initialization.
+
+![Database Not Initialized Banner](docs/images/setup-banner.png)
+
+The owner of the LakeBase instance, who deployed the DAB initially, must run the following in Databricks SQL Editor attached to the live-validator Postgres compute.
+
+```sql
+CREATE USER apprunner WITH PASSWORD 'beepboop123';
+
+CREATE SCHEMA IF NOT EXISTS control;
+GRANT USAGE ON SCHEMA control to apprunner;
+GRANT apprunner TO CURRENT_USER;
+ALTER SCHEMA control OWNER TO apprunner;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA control TO apprunner;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA control TO apprunner;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA control 
+  GRANT USAGE, SELECT ON SEQUENCES TO apprunner;
 ```
 
-#### 5. Run the Application
+![Database Not Initialized Banner](docs/images/init-database-1.png)
 
-**Development Mode:**
-```bash
-# Terminal 1: Backend
-source venv/bin/activate
-uvicorn backend.app:app --reload --port 8000
+#### 4. Initialize Metadata Tables
 
-# Terminal 2: Frontend
-cd frontend
-npm run dev
-```
+a. Click the button to initialize the tables:
 
-**Production Mode (Databricks):**
-```bash
-# Backend serves both API and frontend
-uvicorn backend.app:app --host 0.0.0.0 --port 8080
-```
+<img src="docs/images/init-database-2.png" alt="Initialize the tables" width="600"/>
 
-### First Steps Guide
+b. Before you move on, hard-refresh the app using `Cmd+Shift+R` (Mac) or `Ctrl+Shift+R` (Windows). 
 
-Once the app is running, follow these steps to run your first validation:
+c. Navigate back to the Setup tab on bottom left.
+
+<img src="docs/images/return-to-setup.png" alt="Return to setup" width="400"/>
+
+#### 5. Follow remaining instructions in app
+
+As an overview, once you've completed the above steps, follow these steps to run your first validation:
 
 1. **Create Systems** (Systems view)
    - Add your source database (e.g., Netezza production)

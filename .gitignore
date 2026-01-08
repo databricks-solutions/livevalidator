@@ -1,16 +1,31 @@
-/frontend/node_modules/
+# Dependencies - never track
+**/node_modules/
 /venv/
+**/.venv/
+
+# Python cache
+**/__pycache__/
+*.pyc
+*.pyo
 /backend/livevalidator.egg-info/
+
+# Environment & secrets
 .env
 .env.local
 *.pem
+
+# IDE & OS
 .DS_Store
-package-lock.json
 .idea/
-backend/__pycache__/
-frontend/node_modules/
-frontend/build/
-# Keep dist/ in git for Databricks deployment
-# But you need to manually rebuild before committing UI changes
-server.log
+*.log
+
+# Lock files (regenerated)
+package-lock.json
+
+# Build outputs - EXCEPT dist/ which is needed for Databricks deployment
+# Databricks Apps doesn't run npm build, so we commit the built frontend
+# Remember to run `npm run build` before committing UI changes!
+**/build/
+
+# Migration scripts (generated)
 backend/sql/migrate_*.sql
