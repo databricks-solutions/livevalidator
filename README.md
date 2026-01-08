@@ -439,22 +439,32 @@ See [CONTRIBUTING.md](contributing.md) for guidelines.
 
 ## 📄 License
 
-Proprietary - NXP Semiconductors
+MIT License - see [LICENSE](LICENSE) for details
 
 ## 🐛 Troubleshooting
 
+**"Database Not Initialized" banner won't go away:**
+- Ensure you ran `grants.sql` to create the `apprunner` role
+- Ensure you clicked "Initialize Database" in the Setup tab
+- Hard refresh the browser (`Cmd+Shift+R` / `Ctrl+Shift+R`)
+
 **Database connection fails:**
-- Check your `DB_DSN` is correct
-- Verify SSL settings match your database (local = no SSL, Databricks = SSL)
-- Ensure `databricks-ca.pem` exists if using SSL
+- Verify LakeBase is attached to the app in Databricks (provides `PGHOST`, `PGPORT`, `PGDATABASE`)
+- Check that the `apprunner` role exists and has correct password
 
-**Frontend can't reach backend:**
-- Check VITE_API environment variable
-- Verify CORS settings in `backend/app.py`
-- Ensure backend is running on expected port
 
-**Build errors:**
-- Clear node_modules: `rm -rf node_modules && npm install`
-- Clear Python cache: `rm -rf backend/__pycache__`
-- Rebuild: `npm run build`
+**"Role apprunner does not exist":**
+- Run `grants.sql` in Databricks SQL Editor connected to the LakeBase instance
+- Must be run by the LakeBase owner (whoever deployed the DAB)
+
+**Validation jobs stuck in queue:**
+- Check that `job_sentinel` workflow is running in Databricks
+
+- Check Databricks job logs for errors
+
+**Frontend changes not appearing:**
+- Rebuild frontend: `cd src/app/frontend && npm run build`
+- Redeploy the bundle: `databricks bundle deploy -t <your-target>`
+- Redeploy the app: `databricks apps deploy live-validator -t <your-target>`
+- Hard refresh browser to clear cache
 
