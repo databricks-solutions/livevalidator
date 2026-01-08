@@ -1,6 +1,40 @@
 # <img src="src/app/frontend/favicon.ico" alt="LiveValidator" width="32" height="32" style="vertical-align: middle;"/> LiveValidator
 Go link: `go/livevalidatorrepo`
 
+## Table of Contents
+
+- [Overview](#overview)
+  - [What It Does](#what-it-does)
+  - [Arch Overview](#arch-overview)
+  - [Key Capabilities](#key-capabilities)
+  - [Who It's For](#who-its-for)
+- [Quick Start](#-quick-start)
+  - [Prerequisites](#prerequisites)
+  - [Setup](#setup)
+- [Architecture](#️-architecture)
+  - [Component Overview](#component-overview)
+  - [Data Flow](#data-flow)
+  - [File Structure](#file-structure)
+- [Environment Variables](#-environment-variables)
+- [Features](#-features)
+  - [Setting Up](#setting-up)
+  - [Configuring Validations](#configuring-validations)
+  - [Running Validations](#running-validations)
+  - [Monitoring & Results](#monitoring--results)
+- [Advanced Configuration](#-advanced-configuration)
+  - [Type Transformation Functions](#type-transformation-functions)
+  - [Unicode Normalization Options](#unicode-normalization-options)
+  - [System Configuration](#system-configuration)
+  - [Schedule Bindings](#schedule-bindings)
+- [Additional Documentation](#-additional-documentation)
+- [Security Notes](#-security-notes)
+- [Development](#️-development)
+- [Contributing](#-contributing)
+- [License](#-license)
+- [Troubleshooting](#-troubleshooting)
+
+---
+
 ## Overview
 
 **LiveValidator** is a data validation platform designed to ensure data integrity across heterogeneous database systems. It automates the comparison of tables and query results between source and target databases, detecting schema mismatches, row count discrepancies, and row-level differences.
