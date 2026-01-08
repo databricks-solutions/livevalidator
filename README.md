@@ -10,29 +10,16 @@ LiveValidator performs three-tier validation between any two database systems:
 
 1. **Schema Validation** - Compares column names and identifies missing or extra columns
 2. **Row Count Validation** - Compares total row counts between source and target
-3. **Row-Level Validation** - Detects actual data differences using set-based comparison (EXCEPT ALL)
+3. **Row-Level Validation** - Detects actual data differences using either set-based comparison (EXCEPT ALL), or Primary Key.
 
 When differences are found, LiveValidator captures sample records and provides detailed reports through a modern web interface.
 
-### How It Works
+### Architecture
 
-```
-┌─────────────┐         ┌──────────────┐         ┌─────────────┐
-│   Control   │────────▶│  Databricks  │────────▶│  Validation │
-│   Panel     │  Queue  │   Workers    │ Results │   History   │
-│    (UI)     │◀────────│  (Spark)     │◀────────│  (Storage)  │
-└─────────────┘         └──────────────┘         └─────────────┘
-      │                        │
-      │                        │
-      ▼                        ▼
-┌──────────────────────────────────────────────────────┐
-│  Source Systems    ←→    Target Systems              │
-│  (Netezza, Teradata, SQLServer, MySQL, Snowflake...) │
-└──────────────────────────────────────────────────────┘
-```
+![Architecture](docs/images/LiveValidator_arch_color.png)
 
 **Workflow:**
-1. **Configure** systems, tables, and queries through the web UI
+1. **Configure** systems, tables, and queries through the web UI, bulk uploads supported
 2. **Schedule** automated validations or trigger them manually
 3. **Queue** manages job execution on Databricks Spark clusters
 4. **Execute** validation logic compares data between systems
@@ -40,13 +27,14 @@ When differences are found, LiveValidator captures sample records and provides d
 
 ### Key Capabilities
 
-- **Multi-Database Support**: Databricks, Netezza, Teradata, SQL Server, MySQL, Postgres, Snowflake
-- **Type Transformations**: Handle data type differences with custom Python functions per system pair
-- **Primary Key Tracking**: Configure primary key columns for proper row identification and tracking
+- **Snappy LakeBase Backend**: Handle 
+- **Tagging**: Handle 
+- **Multi-Database Support**: Databricks, Netezza, Teradata, SQL Server, MySQL, Postgres, Snowflake, or custom JDBC sources
+- **Custom Type Transformations**: Handle data type differences with custom Python functions per system pair
+- **Primary Key Tracking**: Optionally configure primary key columns for proper row identification and tracking
 - **Smart Comparison**: Unicode normalization, special character handling, and configurable column filtering
 - **Scheduling**: Cron-based automation with priority queue management
 - **History & Analytics**: 7-day UI retention with tags, filters, and drill-down capabilities
-- **Databricks Native**: Built for Databricks workflows with Unity Catalog integration
 
 ### Who It's For
 
