@@ -66,7 +66,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA control TO apprunne
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA control TO apprunner;
 
 ALTER DEFAULT PRIVILEGES IN SCHEMA control 
-  GRANT USAGE, SELECT ON SEQUENCES TO apprunner;`}
+GRANT USAGE, SELECT ON SEQUENCES TO apprunner;`}
             </pre>
           </div>
 
@@ -74,26 +74,6 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA control
           <div className="mb-5 pb-5 border-b border-gray-700">
             <h4 className="text-purple-300 font-semibold text-lg mb-3">
               <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">2</span>
-              Enable Postgres Native Role Login
-            </h4>
-            <p className="text-gray-300 text-sm ml-9">
-              Follow the instructions in the{' '}
-              <a 
-                href="https://docs.databricks.com/en/lakebase/native-postgres-roles.html" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-purple-400 underline hover:text-purple-300"
-              >
-                Databricks Lakebase documentation
-              </a>
-              {' '}to enable native Postgres role-based authentication.
-            </p>
-          </div>
-
-          {/* Step 3 */}
-          <div className="mb-5 pb-5 border-b border-gray-700">
-            <h4 className="text-purple-300 font-semibold text-lg mb-3">
-              <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">3</span>
               Initialize the Database
             </h4>
             <p className="text-gray-300 text-sm mb-3 ml-9">
@@ -108,6 +88,17 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA control
                 {initLoading ? 'Initializing...' : '✨ Initialize Database'}
               </button>
             </div>
+          </div>
+
+          {/* Step 3 */}
+          <div className="mb-5 pb-5 border-b border-gray-700">
+            <h4 className="text-purple-300 font-semibold text-lg mb-3">
+              <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">3</span>
+              Hard refresh
+            </h4>
+            <p className="text-gray-300 text-sm ml-9">
+              Hard-refresh the app using Cmd + Shift + R (Mac) or Ctrl + Shift + R (Windows). Now navigate back to the Setup tab on bottom right.
+            </p>
           </div>
 
           {/* Step 4 */}
@@ -158,10 +149,16 @@ w.secrets.put_secret('livevalidator', key="mysystem_pass", string_value="*******
           <div className="mb-5 pb-5 border-b border-gray-700">
             <h4 className="text-purple-300 font-semibold text-lg mb-3">
               <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">6</span>
-              Create Schedules
+              Start <strong>Job Sentinel</strong>
             </h4>
             <p className="text-gray-300 text-sm ml-9">
-              Go to the <strong>Schedules</strong> tab and define when your validations should run (e.g., daily, weekly).
+              Run the command to begin the daemon which handles triggers and schedules
+            </p>
+            <pre className="bg-charcoal-800 p-3 rounded text-xs text-gray-200 overflow-x-auto border border-gray-700 ml-9">
+{`databricks bundle run job_sentinel --no-wait -t <your target>`}
+            </pre>
+            <p className="text-gray-300 text-sm ml-9">
+            You can also trigger it from the Jobs UI
             </p>
           </div>
 
@@ -173,7 +170,18 @@ w.secrets.put_secret('livevalidator', key="mysystem_pass", string_value="*******
             </h4>
             <p className="text-gray-300 text-sm ml-9">
               Go to the <strong>Tables</strong> and <strong>Queries</strong> tabs to define what you want to validate. 
-              Bind them to schedules or run them manually with the ▶️ button.
+              Bind them to schedules (see next step) or run them manually with the ▶️ button.
+            </p>
+          </div>
+
+          {/* Step 8 */}
+          <div className="mb-5 pb-5 border-b border-gray-700">
+            <h4 className="text-purple-300 font-semibold text-lg mb-3">
+              <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">8</span>
+              Create Schedules
+            </h4>
+            <p className="text-gray-300 text-sm ml-9">
+              Go to the <strong>Schedules</strong> tab and define when your validations should run (e.g., daily, weekly).
             </p>
           </div>
         </div>

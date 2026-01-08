@@ -11,7 +11,7 @@ resources:
               backend_api_url: ${resources.apps.live_validator.url}
           timeout_seconds: 3600
           disable_auto_optimization: true
-          existing_cluster_id: ${resources.clusters.livevalidator.id}
+          existing_cluster_id: ${resources.clusters.live_validator_cluster.id}
           libraries:
             - maven:
                 coordinates: com.teradata.jdbc:terajdbc:20.00.00.51
@@ -46,10 +46,6 @@ resources:
           default: "{}"
 
       permissions:
-        - level: CAN_MANAGE
-          group_name: 1dp-migration-prd-admin
-        - level: CAN_MANAGE_RUN
-          service_principal_name: f1011635-4c0f-4939-b262-b25676999ed3
         - level: CAN_MANAGE_RUN
           group_name: users
       
