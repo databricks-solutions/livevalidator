@@ -260,7 +260,7 @@ async def get_current_user():
 
 # ---------- Tables ----------
 @api.get("/tables")
-async def list_tables(q: str | None = None):
+async def list_tables(q: Optional[str] = None):
     if q:
         rows = await fetch("""
             SELECT 
@@ -465,14 +465,15 @@ async def bulk_create_tables(body: BulkTableRequest):
                 item.include_columns or [], item.exclude_columns or [],
                 item.is_active, user_email)
                 
-                # Bind to schedule
-                schedule = await fetchrow("SELECT id FROM control.schedules WHERE name=$1", item.schedule_name)
-                if schedule:
-                    await execute("""
-                        INSERT INTO control.schedule_bindings (schedule_id, entity_type, entity_id)
-                        VALUES ($1, 'table', $2)
-                        ON CONFLICT DO NOTHING
-                    """, schedule['id'], row['id'])
+                # Bind to schedule (if provided)
+                if item.schedule_name:
+                    schedule = await fetchrow("SELECT id FROM control.schedules WHERE name=$1", item.schedule_name)
+                    if schedule:
+                        await execute("""
+                            INSERT INTO control.schedule_bindings (schedule_id, entity_type, entity_id)
+                            VALUES ($1, 'table', $2)
+                            ON CONFLICT DO NOTHING
+                        """, schedule['id'], row['id'])
                 
                 # Apply tags if provided
                 if item.tags:
@@ -499,7 +500,7 @@ async def bulk_create_tables(body: BulkTableRequest):
 
 # ---------- Compare Queries ----------
 @api.get("/queries")
-async def list_queries(q: str | None = None):
+async def list_queries(q: Optional[str] = None):
     if q:
         rows = await fetch("""
             SELECT 
@@ -683,14 +684,15 @@ async def bulk_create_queries(body: BulkQueryRequest):
                 item.compare_mode, item.pk_columns, item.watermark_filter,
                 item.is_active, user_email)
                 
-                # Bind to schedule
-                schedule = await fetchrow("SELECT id FROM control.schedules WHERE name=$1", item.schedule_name)
-                if schedule:
-                    await execute("""
-                        INSERT INTO control.schedule_bindings (schedule_id, entity_type, entity_id)
-                        VALUES ($1, 'compare_query', $2)
-                        ON CONFLICT DO NOTHING
-                    """, schedule['id'], row['id'])
+                # Bind to schedule (if provided)
+                if item.schedule_name:
+                    schedule = await fetchrow("SELECT id FROM control.schedules WHERE name=$1", item.schedule_name)
+                    if schedule:
+                        await execute("""
+                            INSERT INTO control.schedule_bindings (schedule_id, entity_type, entity_id)
+                            VALUES ($1, 'compare_query', $2)
+                            ON CONFLICT DO NOTHING
+                        """, schedule['id'], row['id'])
                 
                 # Apply tags if provided
                 if item.tags:
@@ -814,7 +816,7 @@ async def delete_binding(id: int):
 
 # ---------- Trigger now ----------
 @api.get("/triggers")
-async def list_triggers(status: str | None = None):
+async def list_triggers(status: Optional[str] = None):
     """
     Get active triggers (queued/running only).
     Used by UI to show current queue state.
@@ -1006,10 +1008,10 @@ async def get_running_per_system():
 # ---------- Validation History ----------
 @api.get("/validation-history")
 async def list_validation_history(
-    entity_type: str | None = None,
-    entity_id: int | None = None,
-    status: str | None = None,
-    schedule_id: int | None = None,
+    entity_type: Optional[str] = None,
+    entity_id: Optional[int] = None,
+    status: Optional[str] = None,
+    schedule_id: Optional[int] = None,
     days_back: int = 30,
     limit: int = 100,
     offset: int = 0

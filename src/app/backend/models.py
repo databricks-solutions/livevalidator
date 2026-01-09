@@ -47,7 +47,7 @@ class BulkTableItem(BaseModel):
     src_table: str
     tgt_schema: Optional[str] = None
     tgt_table: Optional[str] = None
-    schedule_name: str
+    schedule_name: Optional[str] = None
     compare_mode: Optional[Literal['except_all','primary_key','hash']] = 'except_all'
     pk_columns: Optional[list[str]] = None
     watermark_filter: Optional[str] = None
@@ -95,7 +95,7 @@ class QueryUpdate(BaseModel):
 class BulkQueryItem(BaseModel):
     name: Optional[str] = None
     sql: str
-    schedule_name: str
+    schedule_name: Optional[str] = None
     compare_mode: Optional[Literal['except_all','primary_key','hash']] = 'except_all'
     pk_columns: Optional[list[str]] = None
     watermark_filter: Optional[str] = None

@@ -149,7 +149,6 @@ export function UploadCSVModal({ type, systems, schedules, onClose, onUpload }) 
                     <ul className="text-gray-300 ml-4 space-y-1">
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded text-purple-400">src_schema</code> - Source schema name</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded text-purple-400">src_table</code> - Source table name</li>
-                      <li><code className="bg-charcoal-700 px-2 py-0.5 rounded text-purple-400">schedule_name</code> - Schedule to bind to (must exist)</li>
                     </ul>
                   </div>
                   <div>
@@ -157,6 +156,7 @@ export function UploadCSVModal({ type, systems, schedules, onClose, onUpload }) 
                     <ul className="text-gray-400 ml-4 space-y-1 text-xs">
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded text-green-400">source</code> - Source system name (overrides default above)</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded text-green-400">target</code> - Target system name (overrides default above)</li>
+                      <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">schedule_name</code> - Schedule to bind to (must exist if provided)</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">name</code> - Display name (defaults to src_schema.src_table)</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">tgt_schema</code> - Target schema (defaults to src_schema)</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">tgt_table</code> - Target table (defaults to src_table)</li>
@@ -175,7 +175,6 @@ export function UploadCSVModal({ type, systems, schedules, onClose, onUpload }) 
                     <p className="text-rust-light font-semibold mb-1">✅ Required Headers:</p>
                     <ul className="text-gray-300 ml-4 space-y-1">
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded text-purple-400">sql</code> - SQL query to execute</li>
-                      <li><code className="bg-charcoal-700 px-2 py-0.5 rounded text-purple-400">schedule_name</code> - Schedule to bind to (must exist)</li>
                     </ul>
                   </div>
                   <div>
@@ -183,6 +182,7 @@ export function UploadCSVModal({ type, systems, schedules, onClose, onUpload }) 
                     <ul className="text-gray-400 ml-4 space-y-1 text-xs">
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded text-green-400">source</code> - Source system name (overrides default above)</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded text-green-400">target</code> - Target system name (overrides default above)</li>
+                      <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">schedule_name</code> - Schedule to bind to (must exist if provided)</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">name</code> - Display name (defaults to "Query [row#]")</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">is_active</code> - true/false (defaults to true)</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">compare_mode</code> - except_all, primary_key (defaults to except_all)</li>

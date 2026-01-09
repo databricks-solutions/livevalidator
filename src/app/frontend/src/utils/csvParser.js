@@ -32,9 +32,8 @@ function validateCSVData(data, type, schedules, systems) {
       // Required fields for tables
       if (!row.src_schema) rowErrors.push(`Missing src_schema`);
       if (!row.src_table) rowErrors.push(`Missing src_table`);
-      if (!row.schedule_name) rowErrors.push(`Missing schedule_name`);
       
-      // Check schedule exists
+      // Check schedule exists (if provided)
       if (row.schedule_name && !schedules.find(s => s.name === row.schedule_name)) {
         rowErrors.push(`Schedule '${row.schedule_name}' not found`);
       }
@@ -72,9 +71,8 @@ function validateCSVData(data, type, schedules, systems) {
     } else if (type === 'queries') {
       // Required fields for queries
       if (!row.sql) rowErrors.push(`Missing sql`);
-      if (!row.schedule_name) rowErrors.push(`Missing schedule_name`);
       
-      // Check schedule exists
+      // Check schedule exists (if provided)
       if (row.schedule_name && !schedules.find(s => s.name === row.schedule_name)) {
         rowErrors.push(`Schedule '${row.schedule_name}' not found`);
       }
