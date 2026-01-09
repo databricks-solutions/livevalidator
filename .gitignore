@@ -15,9 +15,8 @@
 .env.local
 *.pem
 
-# Dev-specific bundle config (template generates this for users)
+# User-specific bundle config (copy from databricks.yml.example)
 /databricks.yml
-/template/databricks.yml
 
 # IDE & OS
 .DS_Store
