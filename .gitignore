@@ -7,6 +7,7 @@
 **/__pycache__/
 *.pyc
 *.pyo
+.mypy_cache/
 /backend/livevalidator.egg-info/
 
 # Environment & secrets
@@ -14,10 +15,17 @@
 .env.local
 *.pem
 
+# Dev-specific bundle config (template generates this for users)
+/databricks.yml
+/template/databricks.yml
+
 # IDE & OS
 .DS_Store
 .idea/
 *.log
+
+# Databricks CLI state (regenerated on deploy)
+.databricks/
 
 # Lock files (regenerated)
 package-lock.json

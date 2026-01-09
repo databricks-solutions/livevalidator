@@ -1,0 +1,28 @@
+{
+  "properties": {
+    "target_name": {
+      "type": "string",
+      "description": "Target name (e.g., dev, prod)",
+      "default": "dev"
+    },
+    "workspace_host": {
+      "type": "string",
+      "description": "Databricks workspace URL (e.g., https://my-workspace.cloud.databricks.com/)"
+    },
+    "cloud": {
+      "type": "string",
+      "description": "Cloud provider",
+      "enum": ["aws", "azure", "gcp"],
+      "default": "aws"
+    },
+    "admin_group": {
+      "type": "string",
+      "description": "Admin group name (will have CAN_MANAGE permissions)"
+    },
+    "deployer_email": {
+      "type": "string",
+      "description": "Your Databricks email address"
+    }
+  },
+  "success_message": "\n✅ LiveValidator template initialized successfully!\n\nNext steps:\n  1. cd LiveValidator\n  2. databricks bundle deploy -t {{.target_name}}\n  3. databricks apps start live-validator -t {{.target_name}}\n  4. Open the app URL and complete setup\n\nSee README.md for detailed instructions.\n"
+}
