@@ -14,7 +14,7 @@ A Databricks Asset Bundle template for deploying LiveValidator, a data validatio
 ### Initialize the Template
 
 ```bash
-databricks bundle init https://github.com/databrickslabs/LiveValidator
+databricks bundle init https://github.com/databricks-field-eng/livevalidator
 ```
 
 You'll be prompted for:
