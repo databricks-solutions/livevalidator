@@ -1567,36 +1567,47 @@ async def get_next_trigger(worker_id: str = "worker-default"):
     """
     Worker polls this endpoint to get next trigger to execute.
     Uses SKIP LOCKED for atomic claiming.
+    Automatically cleans up orphaned triggers and retries.
     """
-    row = await fetchrow("""
-        UPDATE control.triggers
-        SET status = 'running',
-            worker_id = $1,
-            locked_at = now(),
-            started_at = COALESCE(started_at, now()),
-            attempts = attempts + 1
-        WHERE id = (
-            SELECT id FROM control.triggers
-            WHERE status = 'queued'
-            ORDER BY priority ASC, id ASC
-            FOR UPDATE SKIP LOCKED
-            LIMIT 1
-        )
-        RETURNING *
-    """, worker_id)
+    max_retries = 50  # Prevent infinite loop if something goes wrong
     
-    if not row:
-        return None
-    
-    # Fetch full entity details
-    if row['entity_type'] == 'table':
-        entity = await fetchrow("SELECT * FROM control.datasets WHERE id=$1", row['entity_id'])
+    for _ in range(max_retries):
+        row = await fetchrow("""
+            UPDATE control.triggers
+            SET status = 'running',
+                worker_id = $1,
+                locked_at = now(),
+                started_at = COALESCE(started_at, now()),
+                attempts = attempts + 1
+            WHERE id = (
+                SELECT id FROM control.triggers
+                WHERE status = 'queued'
+                ORDER BY priority ASC, id ASC
+                FOR UPDATE SKIP LOCKED
+                LIMIT 1
+            )
+            RETURNING *
+        """, worker_id)
+        
+        if not row:
+            return None  # Queue is truly empty
+        
+        # Fetch full entity details
+        if row['entity_type'] == 'table':
+            entity = await fetchrow("SELECT * FROM control.datasets WHERE id=$1", row['entity_id'])
+        else:
+            entity = await fetchrow("SELECT * FROM control.compare_queries WHERE id=$1", row['entity_id'])
+        
+        if not entity:
+            # Entity was deleted, clean up orphaned trigger and retry
+            await execute("DELETE FROM control.triggers WHERE id=$1", row['id'])
+            print(f"[cleanup] Removed orphaned trigger {row['id']} (entity {row['entity_type']} #{row['entity_id']} no longer exists)")
+            continue  # Try next trigger
+        
+        # Found a valid trigger, break out of retry loop
+        break
     else:
-        entity = await fetchrow("SELECT * FROM control.compare_queries WHERE id=$1", row['entity_id'])
-    
-    if not entity:
-        # Entity was deleted, clean up trigger
-        await execute("DELETE FROM control.triggers WHERE id=$1", row['id'])
+        # Exhausted retries (unlikely, but safety net)
         return None
     
     # add system names for extra user transparency
