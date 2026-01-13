@@ -12,7 +12,7 @@ from datetime import datetime, date, UTC
 from decimal import Decimal
 from collections.abc import Callable
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, regexp_replace, translate, xxhash64
+from pyspark.sql.functions import col, lit, regexp_replace, translate, xxhash64, coalesce
 from databricks.sdk import WorkspaceClient
 
 # Initialize workspace client for auth
@@ -350,6 +350,16 @@ def _downgrade_unicode(df: DataFrame):
 def run_except_all(src_df: DataFrame, tgt_df: DataFrame):
     return src_df.exceptAll(tgt_df)
 
+def null_safe_join(lhs, rhs, keys, how="inner"):
+    jk = [f"__k{i}" for i in range(len(keys))]
+    null_sentinel = "live_validator_null_placeholder"
+    def with_join_keys(df):
+        nulls_replaced = [coalesce(col(k).cast("string"), lit(null_sentinel)).alias(jk[i]) for i, k in enumerate(keys)]
+        return df.select("*", *nulls_replaced)
+
+    return with_join_keys(lhs).join(with_join_keys(rhs).drop(*keys), jk, how).drop(*jk)
+
+
 def run_pk_compare(src_df: DataFrame, tgt_df: DataFrame, pk: list[str] = pk_columns):
     def rowhash_exact(df):
         # treat the entire row as a struct for native Spark hashing
@@ -359,10 +369,13 @@ def run_pk_compare(src_df: DataFrame, tgt_df: DataFrame, pk: list[str] = pk_colu
     src_df_hash = rowhash_exact(src_df)
     tgt_df_hash = rowhash_exact(tgt_df)
 
-    joined = src_df_hash.join(tgt_df_hash, pk, "leftouter") \
-                .select(*pk,
-                        src_df_hash["__hash__"].alias("h_lhs"),
-                        tgt_df_hash["__hash__"].alias("h_rhs"))
+    joined = (
+        null_safe_join(src_df_hash, tgt_df_hash, pk, how="leftouter")
+          .select(
+                *pk,
+                src_df_hash["__hash__"].alias("h_lhs"),
+                tgt_df_hash["__hash__"].alias("h_rhs"))
+    )
 
     mismatch_df = joined.filter(
         (col("h_lhs") != col("h_rhs")) |
@@ -401,11 +414,11 @@ def validate_rows(src_df: DataFrame, tgt_df: DataFrame, exclude: list[str], mode
     
     print(f"Found {diff_count} differences, extracting sample")
 
-    sample: list = diff_df.limit(10).collect()
+    sample_df: DataFrame = diff_df.limit(10)
     
     # Convert datetime/decimal objects to JSON-serializable formats
     sample_dicts: list[dict] = []
-    for row in sample:
+    for row in sample_df.collect():
         row_dict: dict = {k: serialize_value(v) for k, v in row.asDict().items()}
         sample_dicts.append(row_dict)
 
@@ -416,7 +429,8 @@ def validate_rows(src_df: DataFrame, tgt_df: DataFrame, exclude: list[str], mode
         "rows_different": diff_count,
         "sample_differences": sample_dicts,
         "src_df": src_filtered,
-        "tgt_df": tgt_filtered
+        "tgt_df": tgt_filtered,
+        "sample_df": sample_df
     }
 
 # COMMAND ----------
@@ -540,7 +554,15 @@ serde_result: dict = result.copy()
 if serde_result.get('src_df'):
     src_df = serde_result.pop('src_df')
     tgt_df = serde_result.pop('tgt_df')
+    sample_df = serde_result.pop('sample_df')
 api_call("POST", "/api/validation-history", serde_result)
+
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## Display Mismatch Samples
+
+# COMMAND ----------
+sample_df.display()
 
 # COMMAND ----------
 
@@ -554,19 +576,16 @@ if compare_mode != "primary_key" or result["rows_different"] == 0 or not result.
 
 # COMMAND ----------
 
-pk_schema = src_df.select(*pk_columns).schema
-pk_names  = [f.name for f in pk_schema.fields]
+src_sample = [r.asDict() for r in null_safe_join(src_df, sample_df, pk_columns).collect()]
+tgt_sample = [r.asDict() for r in null_safe_join(tgt_df, sample_df, pk_columns).collect()]
 
-sample_pks = (
-  spark.createDataFrame(
-    ({k: v for k, v in row.items() if k in pk_columns}
-     for row in (serde_result.get("sample_differences") or []))
-  )
-  .selectExpr(*[f"cast(`{f.name}` as {f.dataType.simpleString()}) as `{f.name}`" for f in pk_schema.fields])
-)
+# COMMAND ----------
 
-src_sample = [row.asDict() for row in src_df.join(sample_pks, pk_columns).collect()]
-tgt_sample = [row.asDict() for row in tgt_df.join(sample_pks, pk_columns).collect()]
+if len(tgt_sample) != len(src_sample):
+    dbutils.notebook.exit(
+        "Found inconsistencies when matching primary keys. "
+        "One or more PKs may be invalid. Validate PKs between source and target."
+    )
 
 # COMMAND ----------
 
@@ -576,8 +595,8 @@ zipped_samples: zip = zip(
 )
 
 mismatch_samples: list[dict] = [
-    {**{pk: src[pk] for pk in pk_columns}, **item} 
-    for src, tgt in zipped_samples 
+    {**{pk: src[pk] for pk in pk_columns}, **item}
+    for src, tgt in zipped_samples
     for item in [
         {".system": source_system_name, **{k: v for k, v in src.items() if v != tgt[k]}}, 
         {".system": target_system_name, **{k: tgt[k] for k, v in src.items() if v != tgt[k]}}
