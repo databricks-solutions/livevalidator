@@ -7,8 +7,15 @@ export function QueueView({
   queueStats, 
   onRefresh 
 }) {
+  const isStale = (trigger) => {
+    if (trigger.status !== 'running' || !trigger.started_at) return false;
+    const startedAt = new Date(trigger.started_at);
+    const hourAgo = Date.now() - 60 * 60 * 1000;
+    return startedAt.getTime() < hourAgo;
+  };
+
   const handleCancel = async (triggerId) => {
-    if (confirm('Cancel this queued validation?')) {
+    if (confirm('Cancel this validation?')) {
       try {
         await apiCall('DELETE', `/api/triggers/${triggerId}`);
         onRefresh();
@@ -77,6 +84,14 @@ export function QueueView({
                       }`}>
                         {trigger.status === 'running' ? '🔄 RUNNING' : '⏳ QUEUED'}
                       </span>
+                      {isStale(trigger) && (
+                        <span 
+                          title="Long-running or stale"
+                          className="text-yellow-400 text-lg cursor-help"
+                        >
+                          ⚠
+                        </span>
+                      )}
                       <span className={`px-2 py-1 text-xs rounded-full ${
                         trigger.entity_type === 'table'
                           ? 'bg-blue-900/40 text-blue-300 border border-blue-700'
@@ -109,12 +124,6 @@ export function QueueView({
                           </span>
                         </div>
                       )}
-                      {trigger.worker_id && (
-                        <div>
-                          <span className="text-gray-500">Worker:</span>
-                          <span className="text-gray-300 ml-2">{trigger.worker_id}</span>
-                        </div>
-                      )}
                       {trigger.attempts > 0 && (
                         <div>
                           <span className="text-gray-500">Attempts:</span>
@@ -137,14 +146,12 @@ export function QueueView({
                     )}
                   </div>
 
-                  {trigger.status === 'queued' && (
-                    <button
-                      onClick={() => handleCancel(trigger.id)}
-                      className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-sm rounded-md transition-colors"
-                    >
-                      ✕ Cancel
-                    </button>
-                  )}
+                  <button
+                    onClick={() => handleCancel(trigger.id)}
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-sm rounded-md transition-colors"
+                  >
+                    ✕ Cancel
+                  </button>
                 </div>
               </div>
             ))
