@@ -488,7 +488,7 @@ try:
         src_df: DataFrame = src_df.limit(src_conn["system"]["max_rows"])
         result["rows_compared"] = src_conn["system"]["max_rows"]
     if tgt_conn["system"]["max_rows"]:
-        print(f"Ignoring target system max row limit of '{src_conn["system"]["max_rows"]}', can only be applied to source system...")
+        print(f"Ignoring target system max row limit of '{tgt_conn["system"]["max_rows"]}', can only be applied to source system...")
     
     # Row-level only if counts match AND compare_mode requires it
     if count_result["row_count_match"]:
