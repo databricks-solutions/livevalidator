@@ -929,13 +929,10 @@ async def create_triggers_bulk(triggers: list[TriggerIn]):
 
 @api.delete("/triggers/{id}")
 async def cancel_trigger(id: int):
-    """Cancel a queued trigger (can't cancel running)."""
+    """Cancel a queued or running trigger."""
     trigger = await fetchrow("SELECT * FROM control.triggers WHERE id=$1", id)
     if not trigger:
         raise HTTPException(status_code=404, detail="Trigger not found")
-    
-    if trigger['status'] == 'running':
-        raise HTTPException(status_code=400, detail="Cannot cancel running trigger")
     
     await execute("DELETE FROM control.triggers WHERE id=$1", id)
     return {"ok": True}

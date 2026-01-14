@@ -164,7 +164,7 @@ class BindingIn(BaseModel):
 
 # ---------- Triggers ----------
 class TriggerIn(BaseModel):
-    source: Literal['manual', 'schedule', 'bulk_job'] = 'manual'
+    source: Literal['manual', 'schedule', 'bulk_job', 'notebook'] = 'manual'
     schedule_id: Optional[int] = None
     entity_type: Literal['table', 'compare_query']
     entity_id: int
