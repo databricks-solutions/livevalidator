@@ -12,7 +12,7 @@ from datetime import datetime, date, UTC
 from decimal import Decimal
 from collections.abc import Callable
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, lit, regexp_replace, translate, xxhash64, coalesce
+from pyspark.sql.functions import col, lit, regexp_replace, translate, xxhash64, coalesce, broadcast
 from databricks.sdk import WorkspaceClient
 
 # Initialize workspace client for auth
@@ -401,10 +401,10 @@ def validate_rows(src_df: DataFrame, tgt_df: DataFrame, exclude: list[str], mode
 
     if downgrade_unicode:
         print(f"Found {str(diff_count)} mis-matches, trying again with unicode downgraded...")
-        src_filtered = _downgrade_unicode(src_filtered)
-        tgt_filtered = _downgrade_unicode(tgt_filtered)
-        diff_df: DataFrame = comparison_func(src_filtered, tgt_filtered)
-
+        # unicode downgrade can be expensive, so we cache results
+        src_filtered = _downgrade_unicode(src_filtered).cache()
+        tgt_filtered = _downgrade_unicode(tgt_filtered).cache()
+        diff_df: DataFrame = comparison_func(src_filtered, tgt_filtered).cache()
         diff_count: int = diff_df.count()
         if not diff_count:
             return {
@@ -559,7 +559,7 @@ api_call("POST", "/api/validation-history", serde_result)
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## Display Mismatch Samples
+# MAGIC ## Display Mismatch Samples (source side)
 
 # COMMAND ----------
 sample_df.display()
@@ -576,8 +576,8 @@ if compare_mode != "primary_key" or result["rows_different"] == 0 or not result.
 
 # COMMAND ----------
 
-src_sample = [r.asDict() for r in null_safe_join(src_df, sample_df, pk_columns).collect()]
-tgt_sample = [r.asDict() for r in null_safe_join(tgt_df, sample_df, pk_columns).collect()]
+src_sample = [r.asDict() for r in null_safe_join(src_df, broadcast(sample_df), pk_columns).collect()]
+tgt_sample = [r.asDict() for r in null_safe_join(tgt_df, broadcast(sample_df), pk_columns).collect()]
 
 # COMMAND ----------
 
