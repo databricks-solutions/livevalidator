@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ErrorBox } from '../components/ErrorBox';
 import { TagList, TagBadge } from '../components/TagBadge';
 import { Checkbox } from '../components/Checkbox';
+import { SampleDifferencesModal } from '../components/modals/SampleDifferencesModal';
 import { validationService } from '../services/api';
 
 export function ValidationResultsView({ data, loading, error, onClearError, highlightId, onClearHighlight, onRefresh }) {
@@ -22,6 +23,7 @@ export function ValidationResultsView({ data, loading, error, onClearError, high
   const [selectedIds, setSelectedIds] = useState([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedSample, setSelectedSample] = useState(null);
   const highlightedRowRef = useRef(null);
   const tagInputRef = useRef(null);
   const inputElementRef = useRef(null);
@@ -666,9 +668,13 @@ export function ValidationResultsView({ data, loading, error, onClearError, high
                       {v.rows_different == null ? (
                         <span className="text-gray-500">-</span>
                       ) : v.rows_different > 0 ? (
-                        <span className="text-rust-light font-medium">
+                        <button
+                          onClick={() => setSelectedSample(v)}
+                          className="text-rust-light font-medium hover:text-rust-lighter underline decoration-dotted cursor-pointer transition-colors"
+                          title="Click to view sample differences"
+                        >
                           {v.rows_different.toLocaleString()} ({v.difference_pct}%)
-                        </span>
+                        </button>
                       ) : (
                         <span className="text-green-400">0</span>
                       )}
@@ -725,6 +731,14 @@ export function ValidationResultsView({ data, loading, error, onClearError, high
             </div>
           </div>
         </div>
+      )}
+
+      {/* Sample Differences Modal */}
+      {selectedSample && (
+        <SampleDifferencesModal 
+          validation={selectedSample} 
+          onClose={() => setSelectedSample(null)} 
+        />
       )}
     </>
   );

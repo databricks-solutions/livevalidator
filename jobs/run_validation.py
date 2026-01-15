@@ -222,8 +222,9 @@ def read_data(
         table: str = f"`{conn['catalog']}`.{table}"
 
     watermark_expr = f" WHERE {watermark_expr}" if watermark_expr else ""
-    read_query = generate_read_query(conn, table, type_mapping_func) if type_mapping_func.strip() else f"SELECT * FROM {table}{watermark_expr}"
-    
+    read_query = generate_read_query(conn, table, type_mapping_func) if type_mapping_func.strip() else f"SELECT * FROM {table}"
+    read_query += watermark_expr
+
     if conn["type"] == "jdbc":
         return query_jdbc(conn, read_query)
     
@@ -555,7 +556,9 @@ if serde_result.get('src_df'):
     src_df = serde_result.pop('src_df')
     tgt_df = serde_result.pop('tgt_df')
     sample_df = serde_result.pop('sample_df')
-api_call("POST", "/api/validation-history", serde_result)
+
+history_response = api_call("POST", "/api/validation-history", serde_result)
+history_id = history_response.get("id") if history_response else None
 
 # COMMAND ----------
 # MAGIC %md
@@ -609,3 +612,49 @@ mismatch_df: DataFrame = spark.createDataFrame(mismatch_samples).display()
 
 # also print the plain text representation for whitespace debugging
 print(mismatch_samples)
+
+# COMMAND ----------
+# Update validation history with formatted PK analysis
+
+if not history_id:
+    dbutils.notebook.exit("No history_id returned from POST, skipping PK analysis update")
+
+# COMMAND ----------
+
+# Re-zip since the original iterator was consumed
+zipped_for_analysis = zip(
+    sorted(src_sample, key=lambda item: [item[pk] for pk in pk_columns]),
+    sorted(tgt_sample, key=lambda item: [item[pk] for pk in pk_columns])
+)
+
+formatted_pk_samples = []
+for src, tgt in zipped_for_analysis:
+    pk_values = {pk: serialize_value(src[pk]) for pk in pk_columns}
+    differences = []
+    for k in src.keys():
+        if k not in pk_columns:
+            src_val = serialize_value(src[k])
+            tgt_val = serialize_value(tgt[k])
+            if src_val != tgt_val:  # Compare serialized values to avoid type mismatches
+                differences.append({
+                    "column": k,
+                    "source_value": src_val,
+                    "target_value": tgt_val
+                })
+    if differences:
+        formatted_pk_samples.append({
+            "pk": pk_values,
+            "differences": differences
+        })
+
+# PATCH the validation history with formatted PK structure
+pk_sample_differences = {
+    "mode": "primary_key",
+    "pk_columns": pk_columns,
+    "samples": formatted_pk_samples
+}
+
+api_call("PATCH", f"/api/validation-history/{history_id}", {
+    "sample_differences": pk_sample_differences
+})
+print(f"Updated validation history {history_id} with PK analysis ({len(formatted_pk_samples)} samples)")

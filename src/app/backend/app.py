@@ -1053,10 +1053,11 @@ async def list_validation_history(
             vh.source, vh.schedule_id, vh.requested_by, vh.requested_at,
             vh.started_at, vh.finished_at, vh.duration_seconds,
             vh.source_system_name, vh.target_system_name,
+            vh.source_table, vh.target_table, vh.pk_columns,
             vh.status, vh.schema_match, vh.row_count_match,
             vh.row_count_source, vh.row_count_target,
             vh.rows_compared, vh.rows_different, vh.difference_pct,
-            vh.error_message, vh.databricks_run_url,
+            vh.compare_mode, vh.sample_differences, vh.error_message, vh.databricks_run_url,
             COALESCE(
                 (SELECT json_agg(t.name ORDER BY t.name)
                  FROM control.entity_tags et
@@ -1162,6 +1163,52 @@ async def create_validation_history(body: dict):
     await execute("DELETE FROM control.triggers WHERE id=$1", body['trigger_id'])
     
     return {"id": row['id'], "ok": True}
+
+@api.patch("/validation-history/{id}")
+async def update_validation_history(id: int, body: dict):
+    """
+    Update specific fields on a validation history record.
+    Used for post-processing like PK analysis of sample_differences.
+    """
+    # Only allow updating specific fields
+    allowed_fields = {
+        'sample_differences', 'status', 'error_message', 'error_details',
+        'rows_compared', 'rows_matched', 'rows_different'
+    }
+    
+    # Filter to only allowed fields that are present in body
+    updates = {k: v for k, v in body.items() if k in allowed_fields}
+    
+    if not updates:
+        raise HTTPException(400, f"No valid fields to update. Allowed: {allowed_fields}")
+    
+    # Build dynamic UPDATE query
+    set_clauses = []
+    params = []
+    param_idx = 1
+    
+    for field, value in updates.items():
+        if field in ('sample_differences', 'error_details'):
+            # JSON fields need serialization
+            set_clauses.append(f"{field} = ${param_idx}::jsonb")
+            params.append(json.dumps(value) if value is not None else None)
+        else:
+            set_clauses.append(f"{field} = ${param_idx}")
+            params.append(value)
+        param_idx += 1
+    
+    params.append(id)
+    
+    result = await execute(f"""
+        UPDATE control.validation_history 
+        SET {', '.join(set_clauses)}
+        WHERE id = ${param_idx}
+    """, *params)
+    
+    if result == "UPDATE 0":
+        raise HTTPException(404, f"Validation history record {id} not found")
+    
+    return {"id": id, "ok": True, "updated_fields": list(updates.keys())}
 
 @api.delete("/validation-history")
 async def delete_validation_history(body: dict):
