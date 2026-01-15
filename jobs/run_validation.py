@@ -222,8 +222,9 @@ def read_data(
         table: str = f"`{conn['catalog']}`.{table}"
 
     watermark_expr = f" WHERE {watermark_expr}" if watermark_expr else ""
-    read_query = generate_read_query(conn, table, type_mapping_func) if type_mapping_func.strip() else f"SELECT * FROM {table}{watermark_expr}"
-    
+    read_query = generate_read_query(conn, table, type_mapping_func) if type_mapping_func.strip() else f"SELECT * FROM {table}"
+    read_query += watermark_expr
+
     if conn["type"] == "jdbc":
         return query_jdbc(conn, read_query)
     
