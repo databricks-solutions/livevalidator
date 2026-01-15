@@ -1056,6 +1056,7 @@ async def list_validation_history(
             vh.source, vh.schedule_id, vh.requested_by, vh.requested_at,
             vh.started_at, vh.finished_at, vh.duration_seconds,
             vh.source_system_name, vh.target_system_name,
+            vh.source_table, vh.target_table, vh.pk_columns,
             vh.status, vh.schema_match, vh.row_count_match,
             vh.row_count_source, vh.row_count_target,
             vh.rows_compared, vh.rows_different, vh.difference_pct,
