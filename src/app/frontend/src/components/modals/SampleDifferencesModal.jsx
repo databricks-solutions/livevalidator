@@ -1,6 +1,35 @@
 import React, { useState } from 'react';
+import { diffChars } from 'diff';
 
 const TRUNCATE_LENGTH = 50;
+
+/**
+ * Render diff with highlighting - red strikethrough for deletions, green for additions
+ */
+function DiffHighlight({ source, target }) {
+  const srcStr = source === null || source === undefined ? '' : String(source);
+  const tgtStr = target === null || target === undefined ? '' : String(target);
+  
+  if (srcStr === tgtStr) {
+    return <span className="whitespace-pre-wrap">{tgtStr || <span className="text-gray-500 italic">empty</span>}</span>;
+  }
+  
+  const diff = diffChars(srcStr, tgtStr);
+  
+  return (
+    <span className="whitespace-pre-wrap">
+      {diff.map((part, i) => {
+        if (part.added) {
+          return <span key={i} className="bg-green-800/60 text-green-200 rounded-sm px-0.5">{part.value}</span>;
+        }
+        if (part.removed) {
+          return <span key={i} className="bg-red-900/60 text-red-300 line-through opacity-70 rounded-sm px-0.5">{part.value}</span>;
+        }
+        return <span key={i}>{part.value}</span>;
+      })}
+    </span>
+  );
+}
 
 /**
  * Generate a SQL SELECT query for a row
@@ -77,12 +106,13 @@ function ExpandableCell({ value, className = '' }) {
   const needsTruncation = strValue.length > TRUNCATE_LENGTH;
   
   if (!needsTruncation) {
-    return <span className={className}>{strValue}</span>;
+    // whitespace-pre-wrap preserves spaces/tabs so whitespace diffs are visible
+    return <span className={`whitespace-pre-wrap ${className}`}>{strValue}</span>;
   }
   
   return (
     <span 
-      className={`cursor-pointer hover:bg-charcoal-300/30 rounded px-0.5 -mx-0.5 ${className}`}
+      className={`cursor-pointer hover:bg-charcoal-300/30 rounded px-0.5 -mx-0.5 whitespace-pre-wrap ${className}`}
       onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
       title={expanded ? 'Click to collapse' : 'Click to expand'}
     >
@@ -206,8 +236,7 @@ function PKPendingView({ samples, validation }) {
     <div>
       <div className="mb-3 p-2 bg-yellow-900/20 border border-yellow-700 rounded">
         <p className="text-yellow-300 text-xs">
-          <strong>Raw difference rows.</strong> Column-by-column PK comparison is not available for this validation. 
-          Check the notebook run for details.
+          Showing sample primary keys with mismatches. Full column-level analysis may follow.
         </p>
       </div>
       
@@ -382,7 +411,7 @@ function PKModeView({ samples, validation }) {
                   </td>
                   <td className="px-3 py-1.5 text-xs text-purple-200 bg-purple-900/10 align-top">
                     <div className="font-mono">
-                      <ExpandableCell value={diff.target_value} />
+                      <DiffHighlight source={diff.source_value} target={diff.target_value} />
                     </div>
                   </td>
                 </tr>
