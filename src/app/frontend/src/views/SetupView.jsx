@@ -119,10 +119,13 @@ GRANT USAGE, SELECT ON SEQUENCES TO apprunner;`}
               Define Secrets
             </h4>
             <p className="text-gray-300 text-sm mb-3 ml-9">
-              While eng is working on an oauth token exchange, add secrets for livevalidator app SP:
-              Get them from this URL:
-              
-              https://live-validator-your-instance.aws.databricksapps.com/api/secrets
+              While eng is working on an oauth token exchange, add secrets for the LiveValidator app service principal.
+              Get the values from: <a 
+                href="/api/secrets" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 underline"
+              >/api/secrets</a>
             </p>
             <pre className="bg-charcoal-800 p-3 rounded text-xs text-gray-200 overflow-x-auto border border-gray-700 ml-9">
 {`from databricks.sdk import WorkspaceClient
