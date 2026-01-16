@@ -80,14 +80,14 @@ function CopySqlButton({ tableName, row, columnsToUse = null }) {
   return (
     <button
       onClick={handleCopy}
-      className={`text-xs px-1.5 py-0.5 rounded border transition-all ${
+      className={`text-xs py-0.5 rounded border transition-all w-[3.25rem] text-center ${
         copied 
           ? 'bg-green-900/50 border-green-600 text-green-300' 
           : 'bg-charcoal-600 border-charcoal-300 text-gray-400 hover:text-gray-200 hover:border-gray-400'
       }`}
       title="Copy SELECT query to clipboard"
     >
-      {copied ? '✓' : 'SQL'}
+      {copied ? 'Copied' : 'SQL'}
     </button>
   );
 }
@@ -244,7 +244,7 @@ function PKPendingView({ samples, validation }) {
         <table className="w-full border border-charcoal-300 rounded">
           <thead className="bg-charcoal-400 sticky top-0">
             <tr>
-              <th className="px-2 py-1.5 w-10 border-r border-charcoal-300"></th>
+              <th className="px-2 py-1.5 w-14 border-r border-charcoal-300"></th>
               {columns.map(col => (
                 <th key={col} className="px-2 py-1.5 text-left text-xs font-semibold text-gray-300 border-r border-charcoal-300 last:border-r-0">
                   {col}
@@ -297,7 +297,7 @@ function ExceptAllModeView({ samples, validation }) {
         <table className="w-full border border-charcoal-300 rounded">
           <thead className="bg-charcoal-400 sticky top-0">
             <tr>
-              <th className="px-2 py-1.5 w-10 border-r border-charcoal-300"></th>
+              <th className="px-2 py-1.5 w-14 border-r border-charcoal-300"></th>
               {columns.map(col => (
                 <th key={col} className="px-2 py-1.5 text-left text-xs font-semibold text-gray-300 border-r border-charcoal-300 last:border-r-0">
                   {col}
