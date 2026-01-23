@@ -6,6 +6,15 @@
   body {
     @apply bg-charcoal-700 text-gray-200;
   }
+  
+  /* Force pointer cursor on interactive elements */
+  button:not(:disabled),
+  a,
+  [role="button"],
+  select,
+  .cursor-pointer {
+    cursor: pointer !important;
+  }
 }
 
 @keyframes slide-in {
@@ -86,4 +95,13 @@
 .writing-vertical {
   writing-mode: vertical-rl;
   text-orientation: mixed;
+}
+
+/* Clickable pie chart sectors - force cursor on all sector paths */
+.recharts-sector,
+path.recharts-sector,
+.recharts-pie path,
+.recharts-layer path,
+svg path[cursor="pointer"] {
+  cursor: pointer !important;
 }

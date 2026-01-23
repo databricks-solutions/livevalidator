@@ -503,15 +503,24 @@ export function DashboardView({ data, loading, error, onNavigateToEntity }) {
 
   /** Select a chart */
   const selectChart = (chartId) => {
-    setSelectedChartId(chartId);
-    setDrillDown(null);
+    if (chartId !== selectedChartId) {
+      setSelectedChartId(chartId);
+      setDrillDown(null);
+    }
   };
 
-  const handlePieClick = (entry, tag = null) => {
-    if (drillDown?.category === entry.category && drillDown?.tag === tag) {
-      setDrillDown(null);
+  const handlePieClick = (entry, chartId) => {
+    // First, select this chart if not already selected
+    if (chartId !== selectedChartId) {
+      setSelectedChartId(chartId);
+      setDrillDown({ category: entry.category });
     } else {
-      setDrillDown({ category: entry.category, tag });
+      // Toggle drilldown if same chart
+      if (drillDown?.category === entry.category) {
+        setDrillDown(null);
+      } else {
+        setDrillDown({ category: entry.category });
+      }
     }
   };
 
@@ -541,7 +550,7 @@ export function DashboardView({ data, loading, error, onNavigateToEntity }) {
     const pct = Math.round(percent * 100);
     
     return (
-      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontWeight="bold">
+      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontWeight="bold" style={{ pointerEvents: 'none' }}>
         <tspan x={x} dy="-0.4em" fontSize={13}>{value}</tspan>
         <tspan x={x} dy="1.2em" fontSize={10} opacity={0.8}>{pct}%</tspan>
       </text>
@@ -568,7 +577,7 @@ export function DashboardView({ data, loading, error, onNavigateToEntity }) {
   };
 
   // Pie chart component with center label
-  const PieChartCard = ({ title, data, tag = null, total }) => {
+  const PieChartCard = ({ title, data, tag = null, total, isChartSelected = false, chartId }) => {
     const isEmpty = data.length === 0;
     const entityCount = total ?? latestPerEntity.length;
     const isTagPie = tag !== null;
@@ -585,7 +594,7 @@ export function DashboardView({ data, loading, error, onNavigateToEntity }) {
       const startY = cy - totalTextHeight / 2 + lineHeight / 2;
       
       return (
-        <g>
+        <g style={{ pointerEvents: 'none' }}>
           {titleLines.map((line, i) => (
             <text 
               key={i}
@@ -594,7 +603,7 @@ export function DashboardView({ data, loading, error, onNavigateToEntity }) {
               textAnchor="middle" 
               dominantBaseline="central" 
               className="fill-gray-200 font-semibold"
-              style={{ fontSize: titleLines.length > 2 ? '14px' : '16px' }}
+              style={{ fontSize: titleLines.length > 2 ? '14px' : '16px', pointerEvents: 'none' }}
             >
               {line}
             </text>
@@ -605,6 +614,7 @@ export function DashboardView({ data, loading, error, onNavigateToEntity }) {
             textAnchor="middle" 
             dominantBaseline="central" 
             className="fill-gray-400 text-sm"
+            style={{ pointerEvents: 'none' }}
           >
             {entityCount} {entityCount === 1 ? 'entity' : 'entities'}
           </text>
@@ -625,6 +635,7 @@ export function DashboardView({ data, loading, error, onNavigateToEntity }) {
             <p className="italic">No data</p>
           </div>
         ) : (
+          <div>
           <ResponsiveContainer width="100%" height={420}>
             <PieChart>
               <defs>
@@ -648,25 +659,30 @@ export function DashboardView({ data, loading, error, onNavigateToEntity }) {
                 dataKey="value"
                 labelLine={false}
                 label={renderPieLabel}
-                onClick={(_, index) => handlePieClick(data[index], tag)}
+                onClick={(_, index) => handlePieClick(data[index], chartId)}
                 cursor="pointer"
                 filter="url(#shadow)"
                 isAnimationActive={false}
               >
-                {data.map((entry, index) => (
+                {data.map((entry, index) => {
+                  const isHighlighted = isChartSelected && drillDown?.category === entry.category;
+                  return (
                   <Cell 
                     key={`cell-${index}`} 
                     fill={`url(#pieGradient-${entry.category})`}
-                    stroke={drillDown?.category === entry.category && drillDown?.tag === tag ? '#fff' : 'rgba(255,255,255,0.1)'}
-                    strokeWidth={drillDown?.category === entry.category && drillDown?.tag === tag ? 3 : 1}
+                    stroke={isHighlighted ? '#fff' : 'rgba(255,255,255,0.1)'}
+                    strokeWidth={isHighlighted ? 3 : 1}
                     className="transition-all duration-200 hover:opacity-80"
+                    style={{ cursor: 'pointer' }}
                   />
-                ))}
+                  );
+                })}
                 <Label content={<CenterLabel />} position="center" />
               </Pie>
-              <Tooltip content={<CustomPieTooltip />} />
+              <Tooltip content={<CustomPieTooltip />} isAnimationActive={false} />
             </PieChart>
           </ResponsiveContainer>
+          </div>
         )}
       </div>
     );
@@ -878,9 +894,10 @@ export function DashboardView({ data, loading, error, onNavigateToEntity }) {
                           : 'Full: all entities with this tag are in chart. Click to remove all.'
                         : 'Click to add all entities with this tag'
                   }
-                  className={`px-2.5 py-1 text-sm rounded-md transition-all duration-200 font-medium border cursor-pointer ${
+                  style={{ cursor: hasData ? 'pointer' : 'not-allowed' }}
+                  className={`px-2.5 py-1 text-sm rounded-md transition-all duration-200 font-medium border ${
                     !hasData
-                      ? 'bg-charcoal-700/30 text-gray-600 border-charcoal-600/30 cursor-not-allowed opacity-50'
+                      ? 'bg-charcoal-700/30 text-gray-600 border-charcoal-600/30 opacity-50'
                       : isFull
                         ? `${colors.bg} ${colors.text} ${colors.border} shadow-sm hover:opacity-80`
                         : isPartial
@@ -925,8 +942,8 @@ export function DashboardView({ data, loading, error, onNavigateToEntity }) {
           ))}
         </div>
         
-        {/* Charts Grid - max 3 per row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Charts Grid - max 3 per row, centered */}
+        <div className="flex flex-wrap gap-4 justify-center">
           {chartPieData.map(({ chartId, tagsInChart: chartTags, fullTags: chartFullTags, partialTags: chartPartialTags, entities, pieData }) => {
             const isSelected = chartId === selectedChartId;
             const isOverall = chartId === 'overall';
@@ -949,7 +966,7 @@ export function DashboardView({ data, loading, error, onNavigateToEntity }) {
               <div
                 key={chartId}
                 onClick={() => selectChart(chartId)}
-                className={`relative cursor-pointer transition-all duration-200 flex flex-col ${
+                className={`relative cursor-pointer transition-all duration-200 flex flex-col w-full md:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.75rem)] max-w-[400px] ${
                   isSelected 
                     ? 'ring-2 ring-purple-500 ring-offset-2 ring-offset-charcoal-600 rounded-xl' 
                     : 'hover:ring-1 hover:ring-charcoal-300 rounded-xl'
@@ -977,6 +994,8 @@ export function DashboardView({ data, loading, error, onNavigateToEntity }) {
                   title={chartTitle} 
                   data={pieData}
                   total={entities.length}
+                  isChartSelected={isSelected}
+                  chartId={chartId}
                 />
                 
                 {/* All tags at bottom (full + partial) */}
@@ -1037,15 +1056,35 @@ export function DashboardView({ data, loading, error, onNavigateToEntity }) {
                   );
                 })
               )}
+              {drillDown && (
+                <span 
+                  className="px-2 py-0.5 text-sm rounded flex items-center gap-1"
+                  style={{ 
+                    backgroundColor: `${CATEGORIES[drillDown.category].color}20`,
+                    color: CATEGORIES[drillDown.category].color,
+                    border: `1px solid ${CATEGORIES[drillDown.category].color}`
+                  }}
+                >
+                  {CATEGORIES[drillDown.category].icon} {CATEGORIES[drillDown.category].label}
+                  <button
+                    onClick={() => setDrillDown(null)}
+                    className="ml-1 hover:opacity-70 font-bold"
+                    title="Clear status filter"
+                  >
+                    x
+                  </button>
+                </span>
+              )}
             </h3>
             <p className="text-sm text-gray-400 mt-1">
-              {latestPerEntity.length} {latestPerEntity.length === 1 ? 'entity' : 'entities'}
+              {(drillDown ? drillDownEntities : latestPerEntity).length} {(drillDown ? drillDownEntities : latestPerEntity).length === 1 ? 'entity' : 'entities'}
+              {drillDown && ` (filtered from ${latestPerEntity.length})`}
             </p>
           </div>
         </div>
         
         <ValidationResultsTable
-          data={latestPerEntity}
+          data={drillDown ? drillDownEntities : latestPerEntity}
           onViewSample={setSelectedSample}
           onEntityClick={onNavigateToEntity}
           emptyMessage="No entities in this chart"
@@ -1125,151 +1164,6 @@ export function DashboardView({ data, loading, error, onNavigateToEntity }) {
         </div>
       </div>
 
-      {/* Drill-down Table */}
-      {drillDown && (
-        <div className="bg-charcoal-500 border border-charcoal-200 rounded-lg">
-          {/* Header */}
-          <div className="p-3 bg-charcoal-400 border-b border-charcoal-200 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span 
-                className="text-lg"
-                style={{ color: CATEGORIES[drillDown.category].color }}
-              >
-                {CATEGORIES[drillDown.category].icon}
-              </span>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-100 flex items-center gap-2">
-                  {CATEGORIES[drillDown.category].label}
-                  {drillDown.tag && (
-                    <span className="text-sm font-normal text-purple-400 bg-purple-900/40 px-2 py-0.5 rounded border border-purple-700">
-                      Tag: {drillDown.tag}
-                    </span>
-                  )}
-                </h3>
-                <p className="text-sm text-gray-400">
-                  {drillDownEntities.length} {drillDownEntities.length === 1 ? 'entity' : 'entities'}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setDrillDown(null)}
-              className="px-3 py-1 text-sm rounded bg-charcoal-600 text-gray-300 border border-charcoal-300 hover:bg-charcoal-500 transition-all"
-            >
-              Close
-            </button>
-          </div>
-          
-          {drillDownEntities.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="text-gray-500">No entities in this category</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto max-h-[400px]">
-              <table className="w-full min-w-[1200px]">
-                <thead className="bg-charcoal-400 border-b border-charcoal-200 sticky top-0 z-10">
-                  <tr>
-                    <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold">Entity</th>
-                    <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold">Type</th>
-                    <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold">Tags</th>
-                    <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold">Status</th>
-                    <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold">Duration</th>
-                    <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold">Source → Target</th>
-                    <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold whitespace-nowrap">Row Counts</th>
-                    <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold whitespace-nowrap">Diffs</th>
-                    <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold">Triggered</th>
-                    <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold w-16">Details</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {drillDownEntities.map((v) => (
-                    <tr 
-                      key={v.id} 
-                      className="border-b border-charcoal-300/30 hover:bg-charcoal-400/50 transition-colors"
-                    >
-                      <td className="px-2 py-1.5 text-gray-200 font-medium text-sm max-w-[300px]" title={v.entity_name}>
-                        <div className="truncate overflow-hidden whitespace-nowrap [direction:rtl] text-left">
-                          <span className="[direction:ltr]">{v.entity_name}</span>
-                        </div>
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <span className={`px-1.5 py-0.5 text-sm rounded-full ${
-                          v.entity_type === 'table'
-                            ? 'bg-blue-900/40 text-blue-300 border border-blue-700'
-                            : 'bg-purple-900/40 text-purple-300 border border-purple-700'
-                        }`}>
-                          {v.entity_type === 'table' ? 'table' : 'query'}
-                        </span>
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <TagList tags={parseTags(v.tags)} maxVisible={4} />
-                      </td>
-                      <td className="px-2 py-1.5">
-                        {v.status === 'succeeded' ? (
-                          <span className="px-1.5 py-0.5 text-sm rounded-full bg-green-900/40 text-green-300 border border-green-700 whitespace-nowrap">
-                            ✓ Success
-                          </span>
-                        ) : v.status === 'error' ? (
-                          <span 
-                            className="px-1.5 py-0.5 text-sm rounded-full bg-orange-900/40 text-orange-300 border border-orange-700 whitespace-nowrap cursor-help"
-                            title={v.error_message || 'Unknown error'}
-                          >
-                            ⚠ Error
-                          </span>
-                        ) : (
-                          <span className="px-1.5 py-0.5 text-sm rounded-full bg-red-900/40 text-red-300 border border-red-700 whitespace-nowrap">
-                            ✗ Failed
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-2 py-1.5 text-gray-300 text-sm whitespace-nowrap">
-                        {((v.duration_seconds || 0) / 60).toFixed(1)}m
-                      </td>
-                      <td className="px-2 py-1.5 text-sm text-gray-400 whitespace-nowrap">
-                        {v.source_system_name} → {v.target_system_name}
-                      </td>
-                      <td className="px-2 py-1.5 text-sm whitespace-nowrap">
-                        {v.row_count_match ? (
-                          <span className="text-green-400">✓ {v.row_count_source?.toLocaleString()}</span>
-                        ) : (
-                          <span className="text-red-400">
-                            {v.row_count_source?.toLocaleString()} ≠ {v.row_count_target?.toLocaleString()}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-2 py-1.5 text-sm whitespace-nowrap">
-                        {v.rows_different == null ? (
-                          <span className="text-gray-500">-</span>
-                        ) : v.rows_different > 0 ? (
-                          <span className="text-rust-light font-medium">
-                            {v.rows_different.toLocaleString()} ({v.difference_pct}%)
-                          </span>
-                        ) : (
-                          <span className="text-green-400">0</span>
-                        )}
-                      </td>
-                      <td className="px-2 py-1.5 text-sm text-gray-400 whitespace-nowrap">
-                        {new Date(v.requested_at).toLocaleString()}
-                      </td>
-                      <td className="px-2 py-1.5 text-sm whitespace-nowrap">
-                        {v.databricks_run_url && (
-                          <a
-                            href={v.databricks_run_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-purple-400 hover:text-purple-300 underline"
-                          >
-                            View
-                          </a>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
