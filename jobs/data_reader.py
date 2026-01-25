@@ -74,6 +74,28 @@ def generate_read_query(conn: dict, table: str, type_mapping_func: str) -> str:
     cast_columns: list[str] = [transform_columns(name, data_type) for name, data_type in col_types] if col_types else ["*"]
     return f"SELECT {', '.join(cast_columns)} FROM {table}"
 
+def read_count(
+    conn: dict,
+    table: str | None = None,
+    query: str | None = None,
+    watermark_expr: str | None = None
+) -> int:
+    """Get row count from system using pushed-down COUNT(*)"""
+    spark: SparkSession = SparkSession.getActiveSession()
+    is_databricks: bool = conn["system"]["kind"] == "Databricks"
+
+    if query:
+        count_query = f"SELECT COUNT(*) as cnt FROM ({query}) _subq"
+    else:
+        tbl = f"`{conn['catalog']}`.{table}" if is_databricks else table
+        where = f" WHERE {watermark_expr}" if watermark_expr else ""
+        count_query = f"SELECT COUNT(*) as cnt FROM {tbl}{where}"
+
+    if conn["type"] == "jdbc":
+        return query_jdbc(conn, count_query).collect()[0]["cnt"]
+    return spark.sql(count_query).collect()[0]["cnt"]
+
+
 def read_data(
     conn: dict, 
     table: str | None = None, 

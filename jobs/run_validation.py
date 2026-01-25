@@ -18,7 +18,7 @@ import os
 sys.path.append(os.path.abspath('.'))
 
 from connections import api_call, get_connection_info
-from data_reader import get_type_transformations, read_data
+from data_reader import get_type_transformations, read_data, read_count
 from transformation_options import downgrade_unicode
 from pk_analysis import run_pk_analysis
 
@@ -110,10 +110,14 @@ def validate_schema(src_df: DataFrame, tgt_df: DataFrame, exclude: list[str]) ->
         }
     }
 
-def validate_counts(src_df: DataFrame, tgt_df: DataFrame) -> dict[str, int | bool]:
-    """Compare row counts between source and target"""
-    src_count: int = src_df.count()
-    tgt_count: int = tgt_df.count()
+def validate_counts(
+    src_conn: dict, tgt_conn: dict,
+    src_table: str | None, tgt_table: str | None,
+    query: str | None, watermark: str | None
+) -> dict[str, int | bool]:
+    """Compare row counts using pushed-down COUNT(*)"""
+    src_count: int = read_count(src_conn, src_table, query, watermark)
+    tgt_count: int = read_count(tgt_conn, tgt_table, query, watermark)
     match: bool = src_count == tgt_count
     
     print(f"\tRow counts {'match' if match else 'do not match'}: source={src_count}, target={tgt_count}")
@@ -249,7 +253,7 @@ try:
     
     # Step 4: Validate counts
     print("Validating counts...")
-    count_result: dict[str, int | bool] = validate_counts(src_df, tgt_df)
+    count_result: dict[str, int | bool] = validate_counts(src_conn, tgt_conn, source_table, target_table, sql, watermark_expr)
     result.update(count_result)
 
     # Step 5: Apply max_rows limit if configured
