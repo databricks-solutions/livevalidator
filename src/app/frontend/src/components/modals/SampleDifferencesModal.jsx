@@ -364,13 +364,16 @@ function ExceptAllModeView({ samples, validation }) {
 /**
  * Transposed summary table - columns as headers, stats as rows
  */
-function SummaryTable({ summary, pkColumns }) {
+function SummaryTable({ summary, isPK }) {
   if (!summary || summary.length === 0) return null;
   
+  // Fallback if isPK not provided
+  const checkPK = isPK || (() => false);
+  
   // Separate PK and non-PK columns, PKs first then preserve order for rest
-  const pkSummary = summary.filter(s => s.is_pk);
-  const nonPkSummary = summary.filter(s => !s.is_pk);
-  const displaySummary = [...pkSummary, ...nonPkSummary];
+  const pkSummary = summary.filter(s => checkPK(s.name));
+  const nonPkSummary = summary.filter(s => !checkPK(s.name));
+  const displaySummary = [...pkSummary, ...nonPkSummary].map(s => ({ ...s, is_pk: checkPK(s.name) }));
   
   if (displaySummary.length === 0) return null;
   
@@ -455,17 +458,21 @@ function SummaryTable({ summary, pkColumns }) {
 /**
  * Collapsible section for missing rows (missing_in_target or missing_in_source)
  */
-function MissingRowsSection({ title, data, tableName, pkColumns, defaultExpanded = false }) {
+function MissingRowsSection({ title, data, tableName, pkColumns = [], defaultExpanded = false }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   
   if (!data) return null;
   
   const { count, summary, samples } = data;
   
+  // Case-insensitive PK matching
+  const pkLower = new Set((pkColumns || []).map(pk => pk.toLowerCase()));
+  const isPK = (col) => pkLower.has((col || '').toLowerCase());
+  
   // Reorder columns: PKs first, then rest in original order
   const allColumns = samples?.[0] ? Object.keys(samples[0]) : [];
-  const pkCols = allColumns.filter(c => pkColumns.includes(c));
-  const nonPkCols = allColumns.filter(c => !pkColumns.includes(c));
+  const pkCols = allColumns.filter(isPK);
+  const nonPkCols = allColumns.filter(c => !isPK(c));
   const columns = [...pkCols, ...nonPkCols];
   
   return (
@@ -486,7 +493,7 @@ function MissingRowsSection({ title, data, tableName, pkColumns, defaultExpanded
           {summary && summary.length > 0 && (
             <div>
               <p className="text-xs text-gray-400 mb-2">Summary (PK columns highlighted, scroll for more)</p>
-              <SummaryTable summary={summary} pkColumns={pkColumns} />
+              <SummaryTable summary={summary} isPK={isPK} />
             </div>
           )}
           
@@ -503,7 +510,7 @@ function MissingRowsSection({ title, data, tableName, pkColumns, defaultExpanded
                         <th 
                           key={col} 
                           className={`px-2 py-1.5 text-left font-semibold border-r border-charcoal-300 last:border-r-0 whitespace-nowrap ${
-                            pkColumns.includes(col) ? 'text-purple-300 bg-purple-900/20' : 'text-gray-300'
+                            isPK(col) ? 'text-purple-300 bg-purple-900/20' : 'text-gray-300'
                           }`}
                         >
                           {col}
@@ -521,7 +528,7 @@ function MissingRowsSection({ title, data, tableName, pkColumns, defaultExpanded
                           <td 
                             key={col} 
                             className={`px-2 py-1.5 font-mono border-r border-charcoal-300 last:border-r-0 ${
-                              pkColumns.includes(col) ? 'bg-purple-900/10 text-purple-200' : 'text-gray-200'
+                              isPK(col) ? 'bg-purple-900/10 text-purple-200' : 'text-gray-200'
                             }`}
                           >
                             <ExpandableCell value={row[col]} />
@@ -571,7 +578,8 @@ function RowCountMismatchView({ samples, validation }) {
   }
   
   const { missing_in_target, missing_in_source } = samples;
-  const pkColumns = validation.pk_columns || [];
+  // Try validation.pk_columns first, fallback to samples.pk_columns if stored there
+  const pkColumns = validation.pk_columns || samples.pk_columns || [];
   const sourceTable = validation.source_table || 'SOURCE_TABLE';
   const targetTable = validation.target_table || 'TARGET_TABLE';
   

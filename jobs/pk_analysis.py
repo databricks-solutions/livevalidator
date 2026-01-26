@@ -65,34 +65,28 @@ def summarize_df(df: DataFrame, pk_columns: list[str]) -> list[dict]:
     """
     from pyspark.sql.functions import col, min as spark_min, max as spark_max, countDistinct, sum as spark_sum, when  # noqa: PLC0415
     
+    pk_set: set[str] = {pk.lower() for pk in pk_columns}
     stats: list[dict] = []
     for field in df.schema.fields:
-        col_name = field.name
-        dtype = str(field.dataType)
-        is_pk = col_name in pk_columns
+        name, dtype = field.name, str(field.dataType)
+        is_pk = name.lower() in pk_set
         
-        null_count_expr = spark_sum(when(col(col_name).isNull(), 1).otherwise(0))
+        null_expr = spark_sum(when(col(name).isNull(), 1).otherwise(0))
         
         if any(t in dtype for t in ["Int", "Long", "Double", "Decimal", "Float", "Short"]):
-            agg_result = df.agg(spark_min(col_name), spark_max(col_name), null_count_expr).collect()[0]
-            stats.append({
-                "name": col_name, "type": "numeric", "is_pk": is_pk,
-                "min": agg_result[0], "max": agg_result[1], "nulls": int(agg_result[2] or 0)
-            })
+            agg = df.agg(spark_min(name), spark_max(name), null_expr).collect()[0]
+            stats.append({"name": name, "type": "numeric", "is_pk": is_pk,
+                          "min": agg[0], "max": agg[1], "nulls": int(agg[2] or 0)})
         elif any(t in dtype for t in ["Timestamp", "Date"]):
-            agg_result = df.agg(spark_min(col_name), spark_max(col_name), null_count_expr).collect()[0]
-            min_val = agg_result[0].isoformat() if agg_result[0] else None
-            max_val = agg_result[1].isoformat() if agg_result[1] else None
-            stats.append({
-                "name": col_name, "type": "time", "is_pk": is_pk,
-                "min": min_val, "max": max_val, "nulls": int(agg_result[2] or 0)
-            })
+            agg = df.agg(spark_min(name), spark_max(name), null_expr).collect()[0]
+            stats.append({"name": name, "type": "time", "is_pk": is_pk,
+                          "min": agg[0].isoformat() if agg[0] else None,
+                          "max": agg[1].isoformat() if agg[1] else None,
+                          "nulls": int(agg[2] or 0)})
         else:
-            agg_result = df.agg(countDistinct(col_name), null_count_expr).collect()[0]
-            stats.append({
-                "name": col_name, "type": "string", "is_pk": is_pk,
-                "cardinality": int(agg_result[0] or 0), "nulls": int(agg_result[1] or 0)
-            })
+            agg = df.agg(countDistinct(name), null_expr).collect()[0]
+            stats.append({"name": name, "type": "string", "is_pk": is_pk,
+                          "cardinality": int(agg[0] or 0), "nulls": int(agg[1] or 0)})
     return stats
 
 
@@ -162,6 +156,7 @@ def run_pk_count_analysis(result: dict) -> dict | None:
     return {
         "mode": "row_count_mismatch",
         "skipped": False,
+        "pk_columns": pk_columns,
         "missing_in_target": {
             "count": missing_in_target_count,
             "summary": missing_in_target_summary,
