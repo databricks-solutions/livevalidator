@@ -2,28 +2,134 @@ import React, { useState } from 'react';
 import { diffChars } from 'diff';
 
 const TRUNCATE_LENGTH = 50;
+const MAX_CHANGE_RATIO = 0.4; // If >40% of non-whitespace chars changed, show compact view
 
 /**
- * Render diff with highlighting - red strikethrough for deletions, green for additions
+ * Strip all whitespace from string for comparison
+ */
+function stripWhitespace(str) {
+  return str.replace(/\s+/g, '');
+}
+
+/**
+ * Make invisible characters visible - spaces kept as-is (shown via highlight)
+ */
+function makeVisible(str) {
+  return str
+    .replace(/\t/g, '⇥')        // tab symbol
+    .replace(/\n/g, '↵\n')
+    .replace(/\u00A0/g, ' ')    // non-breaking space → regular space
+    .replace(/\u200B/g, '');    // zero-width space → remove
+}
+
+/**
+ * Render diff with highlighting - guarantees ALL differences are shown
+ * - Whitespace-only differences always use char diff
+ * - Very different content uses compact view
  */
 function DiffHighlight({ source, target }) {
-  const srcStr = source === null || source === undefined ? '' : String(source);
-  const tgtStr = target === null || target === undefined ? '' : String(target);
+  const srcIsNull = source === null || source === undefined;
+  const tgtIsNull = target === null || target === undefined;
   
+  // Both null
+  if (srcIsNull && tgtIsNull) {
+    return <span className="text-gray-500 italic">null</span>;
+  }
+  
+  // Null vs non-null
+  if (srcIsNull || tgtIsNull) {
+    return (
+      <span className="whitespace-pre-wrap">
+        {srcIsNull && <span className="bg-red-900/60 text-red-300 line-through opacity-70 rounded-sm px-0.5 italic mr-1">null</span>}
+        {!srcIsNull && <span className="bg-red-900/60 text-red-300 line-through opacity-70 rounded-sm px-0.5 mr-1">{makeVisible(String(source))}</span>}
+        {tgtIsNull ? (
+          <span className="bg-green-800/60 text-green-200 rounded-sm px-0.5 italic">null</span>
+        ) : (
+          <span className="bg-green-800/60 text-green-200 rounded-sm px-0.5">{makeVisible(String(target))}</span>
+        )}
+      </span>
+    );
+  }
+  
+  const srcStr = String(source);
+  const tgtStr = String(target);
+  
+  // Identical
   if (srcStr === tgtStr) {
     return <span className="whitespace-pre-wrap">{tgtStr || <span className="text-gray-500 italic">empty</span>}</span>;
   }
   
+  // Empty vs non-empty
+  if (srcStr === '' || tgtStr === '') {
+    return (
+      <span className="whitespace-pre-wrap">
+        {srcStr !== '' && <span className="bg-red-900/60 text-red-300 line-through opacity-70 rounded-sm px-0.5 mr-1">{makeVisible(srcStr)}</span>}
+        {srcStr === '' && <span className="bg-red-900/60 text-red-300 line-through opacity-70 rounded-sm px-0.5 italic mr-1">empty</span>}
+        {tgtStr === '' ? (
+          <span className="bg-green-800/60 text-green-200 rounded-sm px-0.5 italic">empty</span>
+        ) : (
+          <span className="bg-green-800/60 text-green-200 rounded-sm px-0.5">{makeVisible(tgtStr)}</span>
+        )}
+      </span>
+    );
+  }
+  
+  // Check if difference is whitespace-only by comparing stripped versions
+  const srcStripped = stripWhitespace(srcStr);
+  const tgtStripped = stripWhitespace(tgtStr);
+  const whitespaceOnly = srcStripped === tgtStripped;
+  
+  // Character-level diff
   const diff = diffChars(srcStr, tgtStr);
   
+  // If whitespace-only difference, always show char diff
+  if (whitespaceOnly) {
+    return (
+      <span className="whitespace-pre-wrap">
+        {diff.map((part, i) => {
+          if (part.added) {
+            return <span key={i} className="bg-green-800/60 text-green-200 rounded-sm px-0.5">{makeVisible(part.value)}</span>;
+          }
+          if (part.removed) {
+            return <span key={i} className="bg-red-900/60 text-red-300 line-through opacity-70 rounded-sm px-0.5">{makeVisible(part.value)}</span>;
+          }
+          return <span key={i}>{part.value}</span>;
+        })}
+      </span>
+    );
+  }
+  
+  // Calculate what % of non-whitespace characters are changed
+  let changedChars = 0;
+  for (const part of diff) {
+    if (part.added || part.removed) {
+      changedChars += stripWhitespace(part.value).length;
+    }
+  }
+  const totalNonWsChars = srcStripped.length + tgtStripped.length;
+  const changeRatio = totalNonWsChars > 0 ? changedChars / totalNonWsChars : 1;
+  
+  // Too different - show compact view
+  if (changeRatio > MAX_CHANGE_RATIO) {
+    return (
+      <span 
+        className="whitespace-pre-wrap bg-yellow-800/50 text-yellow-100 rounded-sm px-0.5 cursor-help"
+        title={`Source: ${srcStr}`}
+      >
+        {tgtStr}
+      </span>
+    );
+  }
+  
+  // Similar enough - show inline diff with visible whitespace
   return (
     <span className="whitespace-pre-wrap">
       {diff.map((part, i) => {
         if (part.added) {
-          return <span key={i} className="bg-green-800/60 text-green-200 rounded-sm px-0.5">{part.value}</span>;
+          return <span key={i} className="bg-green-800/60 text-green-200 rounded-sm px-0.5">{makeVisible(part.value)}</span>;
         }
         if (part.removed) {
-          return <span key={i} className="bg-red-900/60 text-red-300 line-through opacity-70 rounded-sm px-0.5">{part.value}</span>;
+          return <span key={i} className="bg-red-900/60 text-red-300 line-through opacity-70 rounded-sm px-0.5">{makeVisible(part.value)}</span>;
         }
         return <span key={i}>{part.value}</span>;
       })}

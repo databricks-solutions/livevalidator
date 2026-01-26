@@ -200,7 +200,7 @@ export function ValidationResultsTable({
                   ) : v.rows_different > 0 ? (
                     <button
                       onClick={() => onViewSample?.(v)}
-                      className="text-rust-light font-medium hover:text-rust-lighter underline decoration-dotted cursor-pointer transition-colors"
+                      className="text-red-400 font-medium hover:text-red-300 underline decoration-dotted cursor-pointer transition-colors"
                       title="Click to view sample differences"
                     >
                       {v.rows_different.toLocaleString()} ({v.difference_pct}%)
