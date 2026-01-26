@@ -21,7 +21,7 @@ sys.path.append(os.path.abspath('.'))
 from connections import api_call, get_connection_info
 from data_reader import get_type_transformations, read_data, read_count
 from transformation_options import downgrade_unicode
-from pk_analysis import run_pk_analysis, null_safe_join
+from pk_analysis import run_pk_analysis, run_pk_count_analysis, null_safe_join
 
 # COMMAND ----------
 
@@ -312,22 +312,21 @@ history_id: int | None = history_response.get("id") if history_response else Non
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ## Row Count Post Analysis
-
-# COMMAND ----------
-if not result["row_count_match"]:
-    #TODO: Conduct post processing analysis
-    dbutils.notebook.exit("Validation failed - Row count mismatch. Conducted post processing analysis")
+if compare_mode != "primary_key" or not history_id:
+    dbutils.notebook.exit("Finished")
 
 # COMMAND ----------
 # MAGIC %md
 # MAGIC ## PK Post Analysis
 
 # COMMAND ----------
-
-if compare_mode != "primary_key" or result["rows_different"] == 0 or not result.get('sample_differences') or not history_id:
-    dbutils.notebook.exit("Finished")
+if not result["row_count_match"]:
+    pk_count_analysis = run_pk_count_analysis(result)
+    if pk_count_analysis and history_id:
+        api_call("PATCH", f"/api/validation-history/{history_id}", {"sample_differences": pk_count_analysis})
+        if not pk_count_analysis.get("skipped"):
+            print(f"Updated validation history {history_id} with PK count analysis")
+    dbutils.notebook.exit("Validation failed - Row count mismatch")
 
 # COMMAND ----------
 # Display mismatch samples

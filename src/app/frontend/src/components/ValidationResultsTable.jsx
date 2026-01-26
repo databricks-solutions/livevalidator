@@ -180,12 +180,18 @@ export function ValidationResultsTable({
                   {v.source_system_name} → {v.target_system_name}
                 </td>
                 <td className="px-2 py-1.5 text-sm whitespace-nowrap">
-                  {v.row_count_match ? (
+                  {v.status === 'error' || v.row_count_source == null ? (
+                    <span className="text-gray-500">-</span>
+                  ) : v.row_count_match ? (
                     <span className="text-green-400">✓ {v.row_count_source?.toLocaleString()}</span>
                   ) : (
-                    <span className="text-red-400">
+                    <button
+                      onClick={() => onViewSample?.(v)}
+                      className="text-red-400 hover:text-red-300 underline decoration-dotted cursor-pointer transition-colors"
+                      title="Click to view row count analysis"
+                    >
                       {v.row_count_source?.toLocaleString()} ≠ {v.row_count_target?.toLocaleString()}
-                    </span>
+                    </button>
                   )}
                 </td>
                 <td className="px-2 py-1.5 text-sm whitespace-nowrap">

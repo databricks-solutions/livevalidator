@@ -145,8 +145,11 @@ export function SampleDifferencesModal({ validation, onClose }) {
   }
   
   const isPKMode = samples?.mode === 'primary_key';
+  const isRowCountMismatch = samples?.mode === 'row_count_mismatch';
   const isExceptAllMode = Array.isArray(samples);
   const isPKPending = validation.compare_mode === 'primary_key' && isExceptAllMode;
+  const isExceptAllCountMismatch = validation.compare_mode === 'except_all' && !validation.row_count_match && !isExceptAllMode;
+  const isPKCountPending = validation.compare_mode === 'primary_key' && !validation.row_count_match && !isRowCountMismatch;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
@@ -166,7 +169,9 @@ export function SampleDifferencesModal({ validation, onClose }) {
               Sample Differences
             </h3>
             <p className="text-gray-400 text-xs mt-1">
-              {validation.entity_name} • {validation.compare_mode} mode • {validation.rows_different.toLocaleString()} total differences
+              {validation.entity_name} • {validation.compare_mode} mode
+              {validation.rows_different != null && ` • ${validation.rows_different.toLocaleString()} total differences`}
+              {!validation.row_count_match && ' • Row count mismatch'}
             </p>
           </div>
           <div className="flex items-center gap-1">
@@ -198,9 +203,37 @@ export function SampleDifferencesModal({ validation, onClose }) {
         {/* Content - Different for each mode */}
         <div className="flex-1 overflow-auto">
           {isPKMode && <PKModeView samples={samples} validation={validation} />}
+          {isRowCountMismatch && <RowCountMismatchView samples={samples} validation={validation} />}
           {isPKPending && <PKPendingView samples={samples} validation={validation} />}
           {isExceptAllMode && !isPKPending && <ExceptAllModeView samples={samples} validation={validation} />}
-          {!isPKMode && !isExceptAllMode && (
+          {isExceptAllCountMismatch && (
+            <div className="p-4 bg-charcoal-400 border border-charcoal-300 rounded-lg">
+              <p className="text-gray-300 mb-2">
+                <span className="font-semibold">Row count mismatch detected</span>
+              </p>
+              <p className="text-gray-400 text-sm">
+                Source: {validation.row_count_source?.toLocaleString()} rows • Target: {validation.row_count_target?.toLocaleString()} rows
+              </p>
+              <p className="text-gray-500 text-sm mt-3">
+                Detailed row analysis is not available for <span className="font-mono text-gray-400">except_all</span> mode 
+                because there are no primary keys defined to identify which specific rows are missing or extra.
+              </p>
+            </div>
+          )}
+          {isPKCountPending && (
+            <div className="p-4 bg-charcoal-400 border border-charcoal-300 rounded-lg">
+              <p className="text-gray-300 mb-2">
+                <span className="font-semibold">Row count mismatch detected</span>
+              </p>
+              <p className="text-gray-400 text-sm">
+                Source: {validation.row_count_source?.toLocaleString()} rows • Target: {validation.row_count_target?.toLocaleString()} rows
+              </p>
+              <p className="text-gray-500 text-sm mt-3">
+                Analysis data may still be processing. Check the validation notebook for more details.
+              </p>
+            </div>
+          )}
+          {!isPKMode && !isRowCountMismatch && !isExceptAllMode && !isExceptAllCountMismatch && !isPKCountPending && (
             <p className="text-gray-400">No sample data available</p>
           )}
         </div>
@@ -328,6 +361,252 @@ function ExceptAllModeView({ samples, validation }) {
 /**
  * Display for primary_key mode - shows side-by-side comparison grouped by PK
  */
+/**
+ * Transposed summary table - columns as headers, stats as rows
+ */
+function SummaryTable({ summary, pkColumns }) {
+  if (!summary || summary.length === 0) return null;
+  
+  // Separate PK and non-PK columns, PKs first then preserve order for rest
+  const pkSummary = summary.filter(s => s.is_pk);
+  const nonPkSummary = summary.filter(s => !s.is_pk);
+  const displaySummary = [...pkSummary, ...nonPkSummary];
+  
+  if (displaySummary.length === 0) return null;
+  
+  const formatRangeOrCard = (col) => {
+    if (col.type === 'string') {
+      return `${col.cardinality} unique`;
+    }
+    if (col.min === null && col.max === null) return '-';
+    const minStr = col.min != null ? String(col.min).slice(0, 16) : '?';
+    const maxStr = col.max != null ? String(col.max).slice(0, 16) : '?';
+    return minStr === maxStr ? minStr : `${minStr} → ${maxStr}`;
+  };
+  
+  return (
+    <div className="overflow-x-auto">
+      <table className="border border-charcoal-300 rounded text-xs">
+        <thead className="bg-charcoal-400">
+          <tr>
+            <th className="px-2 py-1.5 text-left text-gray-400 font-normal sticky left-0 bg-charcoal-400 z-10 min-w-[70px]"></th>
+            {displaySummary.map((col, idx) => (
+              <th 
+                key={col.name}
+                className={`px-3 py-1.5 text-left font-semibold whitespace-nowrap border-l border-charcoal-300 ${
+                  col.is_pk 
+                    ? 'bg-purple-900/30 text-purple-300' 
+                    : 'text-gray-300'
+                } ${col.is_pk && idx === pkSummary.length - 1 ? 'border-r-2 border-r-purple-500' : ''}`}
+              >
+                {col.name}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="border-t border-charcoal-300">
+            <td className="px-2 py-1 text-gray-400 sticky left-0 bg-charcoal-500 z-10">Type</td>
+            {displaySummary.map((col, idx) => (
+              <td 
+                key={col.name}
+                className={`px-3 py-1 border-l border-charcoal-300 ${
+                  col.is_pk ? 'bg-purple-900/10' : ''
+                } ${col.is_pk && idx === pkSummary.length - 1 ? 'border-r-2 border-r-purple-500' : ''}`}
+              >
+                <span className="text-gray-400">{col.type}</span>
+              </td>
+            ))}
+          </tr>
+          <tr className="border-t border-charcoal-300">
+            <td className="px-2 py-1 text-gray-400 sticky left-0 bg-charcoal-500 z-10">Range</td>
+            {displaySummary.map((col, idx) => (
+              <td 
+                key={col.name}
+                className={`px-3 py-1 border-l border-charcoal-300 font-mono text-gray-200 ${
+                  col.is_pk ? 'bg-purple-900/10' : ''
+                } ${col.is_pk && idx === pkSummary.length - 1 ? 'border-r-2 border-r-purple-500' : ''}`}
+              >
+                {formatRangeOrCard(col)}
+              </td>
+            ))}
+          </tr>
+          <tr className="border-t border-charcoal-300">
+            <td className="px-2 py-1 text-gray-400 sticky left-0 bg-charcoal-500 z-10">Nulls</td>
+            {displaySummary.map((col, idx) => (
+              <td 
+                key={col.name}
+                className={`px-3 py-1 border-l border-charcoal-300 ${
+                  col.is_pk ? 'bg-purple-900/10' : ''
+                } ${col.is_pk && idx === pkSummary.length - 1 ? 'border-r-2 border-r-purple-500' : ''} ${
+                  col.nulls > 0 ? 'text-yellow-400' : 'text-gray-400'
+                }`}
+              >
+                {col.nulls}
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * Collapsible section for missing rows (missing_in_target or missing_in_source)
+ */
+function MissingRowsSection({ title, data, tableName, pkColumns, defaultExpanded = false }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  
+  if (!data) return null;
+  
+  const { count, summary, samples } = data;
+  
+  // Reorder columns: PKs first, then rest in original order
+  const allColumns = samples?.[0] ? Object.keys(samples[0]) : [];
+  const pkCols = allColumns.filter(c => pkColumns.includes(c));
+  const nonPkCols = allColumns.filter(c => !pkColumns.includes(c));
+  const columns = [...pkCols, ...nonPkCols];
+  
+  return (
+    <div className="border border-charcoal-300 rounded-lg overflow-hidden">
+      {/* Header */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-3 py-2 bg-charcoal-400 flex items-center justify-between hover:bg-charcoal-400/80 transition-colors"
+      >
+        <span className="text-sm font-semibold text-gray-200">
+          {expanded ? '▼' : '▶'} {title} ({count.toLocaleString()} rows)
+        </span>
+      </button>
+      
+      {expanded && (
+        <div className="p-3 space-y-3">
+          {/* Summary */}
+          {summary && summary.length > 0 && (
+            <div>
+              <p className="text-xs text-gray-400 mb-2">Summary (PK columns highlighted, scroll for more)</p>
+              <SummaryTable summary={summary} pkColumns={pkColumns} />
+            </div>
+          )}
+          
+          {/* Samples */}
+          {samples && samples.length > 0 && (
+            <div>
+              <p className="text-xs text-gray-400 mb-2">Samples ({samples.length} of {count.toLocaleString()})</p>
+              <div className="overflow-x-auto">
+                <table className="w-full border border-charcoal-300 rounded text-xs">
+                  <thead className="bg-charcoal-400">
+                    <tr>
+                      <th className="px-2 py-1.5 w-14 border-r border-charcoal-300"></th>
+                      {columns.map(col => (
+                        <th 
+                          key={col} 
+                          className={`px-2 py-1.5 text-left font-semibold border-r border-charcoal-300 last:border-r-0 whitespace-nowrap ${
+                            pkColumns.includes(col) ? 'text-purple-300 bg-purple-900/20' : 'text-gray-300'
+                          }`}
+                        >
+                          {col}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {samples.map((row, idx) => (
+                      <tr key={idx} className="border-t border-charcoal-300 hover:bg-charcoal-400/50">
+                        <td className="px-2 py-1.5 border-r border-charcoal-300 text-center">
+                          <CopySqlButton tableName={tableName} row={row} columnsToUse={pkColumns} />
+                        </td>
+                        {columns.map(col => (
+                          <td 
+                            key={col} 
+                            className={`px-2 py-1.5 font-mono border-r border-charcoal-300 last:border-r-0 ${
+                              pkColumns.includes(col) ? 'bg-purple-900/10 text-purple-200' : 'text-gray-200'
+                            }`}
+                          >
+                            <ExpandableCell value={row[col]} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          
+          {(!samples || samples.length === 0) && (
+            <p className="text-gray-500 text-sm italic">No rows in this category</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Display for row count mismatch - shows missing in target and missing in source
+ */
+function RowCountMismatchView({ samples, validation }) {
+  if (samples.skipped) {
+    return (
+      <div className="p-4 bg-yellow-900/20 border border-yellow-700 rounded">
+        <p className="text-yellow-300 text-sm font-semibold">Analysis Skipped</p>
+        <p className="text-yellow-200 text-xs mt-2">
+          Source data was limited and source count ({validation.row_count_source?.toLocaleString()}) is less than 
+          target count ({validation.row_count_target?.toLocaleString()}). Results would be unreliable.
+        </p>
+        {validation?.databricks_run_url && (
+          <a 
+            href={validation.databricks_run_url} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="inline-block mt-2 text-xs text-blue-400 hover:text-blue-300 underline"
+          >
+            View Notebook Run for details
+          </a>
+        )}
+      </div>
+    );
+  }
+  
+  const { missing_in_target, missing_in_source } = samples;
+  const pkColumns = validation.pk_columns || [];
+  const sourceTable = validation.source_table || 'SOURCE_TABLE';
+  const targetTable = validation.target_table || 'TARGET_TABLE';
+  
+  return (
+    <div className="space-y-3">
+      {/* Header info */}
+      <div className="p-2 bg-orange-900/20 border border-orange-700 rounded">
+        <p className="text-orange-300 text-xs">
+          Row count mismatch: Source has {validation.row_count_source?.toLocaleString()} rows, 
+          Target has {validation.row_count_target?.toLocaleString()} rows 
+          (diff: {Math.abs((validation.row_count_source || 0) - (validation.row_count_target || 0)).toLocaleString()})
+        </p>
+      </div>
+      
+      {/* Missing in Target */}
+      <MissingRowsSection
+        title="Missing in Target"
+        data={missing_in_target}
+        tableName={sourceTable}
+        pkColumns={pkColumns}
+        defaultExpanded={true}
+      />
+      
+      {/* Missing in Source (Extra in Target) */}
+      <MissingRowsSection
+        title="Missing in Source (Extra in Target)"
+        data={missing_in_source}
+        tableName={targetTable}
+        pkColumns={pkColumns}
+        defaultExpanded={missing_in_target?.count === 0}
+      />
+    </div>
+  );
+}
+
 function PKModeView({ samples, validation }) {
   if (!samples?.samples || samples.samples.length === 0) {
     return (

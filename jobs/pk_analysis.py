@@ -56,6 +56,125 @@ def null_safe_join(lhs: DataFrame, rhs: DataFrame, keys: list[str], how: str = "
     return with_join_keys(lhs).join(with_join_keys(rhs).drop(*keys), jk, how).drop(*jk)
 
 
+def summarize_df(df: DataFrame, pk_columns: list[str]) -> list[dict]:
+    """
+    Compute summary stats per column, preserving column order.
+    
+    Returns list of dicts (one per column) to preserve order:
+    [{"name": "col1", "type": "numeric", "min": ..., "max": ..., "nulls": ..., "is_pk": True}, ...]
+    """
+    from pyspark.sql.functions import col, min as spark_min, max as spark_max, countDistinct, sum as spark_sum, when  # noqa: PLC0415
+    
+    stats: list[dict] = []
+    for field in df.schema.fields:
+        col_name = field.name
+        dtype = str(field.dataType)
+        is_pk = col_name in pk_columns
+        
+        null_count_expr = spark_sum(when(col(col_name).isNull(), 1).otherwise(0))
+        
+        if any(t in dtype for t in ["Int", "Long", "Double", "Decimal", "Float", "Short"]):
+            agg_result = df.agg(spark_min(col_name), spark_max(col_name), null_count_expr).collect()[0]
+            stats.append({
+                "name": col_name, "type": "numeric", "is_pk": is_pk,
+                "min": agg_result[0], "max": agg_result[1], "nulls": int(agg_result[2] or 0)
+            })
+        elif any(t in dtype for t in ["Timestamp", "Date"]):
+            agg_result = df.agg(spark_min(col_name), spark_max(col_name), null_count_expr).collect()[0]
+            min_val = agg_result[0].isoformat() if agg_result[0] else None
+            max_val = agg_result[1].isoformat() if agg_result[1] else None
+            stats.append({
+                "name": col_name, "type": "time", "is_pk": is_pk,
+                "min": min_val, "max": max_val, "nulls": int(agg_result[2] or 0)
+            })
+        else:
+            agg_result = df.agg(countDistinct(col_name), null_count_expr).collect()[0]
+            stats.append({
+                "name": col_name, "type": "string", "is_pk": is_pk,
+                "cardinality": int(agg_result[0] or 0), "nulls": int(agg_result[1] or 0)
+            })
+    return stats
+
+
+def run_pk_count_analysis(result: dict) -> dict | None:
+    """
+    Analyze row count mismatch using FULL OUTER JOIN on PKs.
+    
+    Args:
+        result: Validation result dict containing src_df, tgt_df, pk_columns,
+                row_count_source, row_count_target, source_was_limited
+    
+    Returns:
+        Analysis dict or None if skipped/not applicable
+    """
+    from pyspark.sql.functions import col  # noqa: PLC0415
+    
+    pk_columns: list[str] = result.get("pk_columns", [])
+    src_df: DataFrame = result.get("src_df")
+    tgt_df: DataFrame = result.get("tgt_df")
+    source_was_limited: bool = result.get("source_was_limited", False)
+    row_count_source: int = result.get("row_count_source", 0)
+    row_count_target: int = result.get("row_count_target", 0)
+    
+    if not all([src_df, tgt_df, pk_columns]):
+        return None
+    
+    # Skip if source was limited and source < target (unreliable results)
+    if source_was_limited and row_count_source < row_count_target:
+        print("Skipping analysis: source was limited and source_count < target_count")
+        return {"mode": "row_count_mismatch", "skipped": True, "reason": "source_limited_and_fewer"}
+    
+    # Select only PK columns for the join to avoid column name collisions
+    src_pks = src_df.select(*pk_columns)
+    tgt_pks = tgt_df.select(*pk_columns)
+    
+    # FULL OUTER JOIN on PKs
+    # Rename target PKs to avoid collision
+    tgt_pk_aliases = {pk: f"_tgt_{pk}" for pk in pk_columns}
+    tgt_pks_renamed = tgt_pks.select(*[col(pk).alias(tgt_pk_aliases[pk]) for pk in pk_columns])
+    
+    join_cond = [col(pk).eqNullSafe(col(tgt_pk_aliases[pk])) for pk in pk_columns]
+    joined = src_pks.join(tgt_pks_renamed, on=join_cond, how="full")
+    
+    # Missing in target: source PKs exist, target PKs are null
+    missing_in_target_df = joined.filter(col(tgt_pk_aliases[pk_columns[0]]).isNull()).select(*pk_columns)
+    # Missing in source: target PKs exist, source PKs are null  
+    missing_in_source_df = joined.filter(col(pk_columns[0]).isNull()).select(*[col(tgt_pk_aliases[pk]).alias(pk) for pk in pk_columns])
+    
+    # Join back to get full rows for samples and stats
+    missing_in_target_full = null_safe_join(src_df, missing_in_target_df, pk_columns, "inner")
+    missing_in_source_full = null_safe_join(tgt_df, missing_in_source_df, pk_columns, "inner")
+    
+    # Counts
+    missing_in_target_count = missing_in_target_full.count()
+    missing_in_source_count = missing_in_source_full.count()
+    
+    print(f"Missing in target: {missing_in_target_count}, Missing in source: {missing_in_source_count}")
+    
+    # Summary stats
+    missing_in_target_summary = summarize_df(missing_in_target_full, pk_columns) if missing_in_target_count > 0 else []
+    missing_in_source_summary = summarize_df(missing_in_source_full, pk_columns) if missing_in_source_count > 0 else []
+    
+    # Samples (10 each)
+    missing_in_target_samples = [r.asDict() for r in missing_in_target_full.limit(10).collect()]
+    missing_in_source_samples = [r.asDict() for r in missing_in_source_full.limit(10).collect()]
+    
+    return {
+        "mode": "row_count_mismatch",
+        "skipped": False,
+        "missing_in_target": {
+            "count": missing_in_target_count,
+            "summary": missing_in_target_summary,
+            "samples": missing_in_target_samples
+        },
+        "missing_in_source": {
+            "count": missing_in_source_count,
+            "summary": missing_in_source_summary,
+            "samples": missing_in_source_samples
+        }
+    }
+
+
 def run_pk_analysis(result: dict) -> dict | None:
     """
     Analyze PK mismatches and return formatted sample differences.
