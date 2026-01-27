@@ -174,14 +174,21 @@ def run_except_all_count_analysis(result: dict) -> dict | None:
     
     print(f"Found {len(column_differences)} columns with differing statistics")
     
-    # Get except_all samples - these are rows in source not in target
-    in_source_not_target_samples = except_all_samples if except_all_samples else []
-    
-    # Get the reverse: rows in target not in source
-    # We need to run target.exceptAll(source)
-    in_target_not_source_df = tgt_df.exceptAll(src_df)
-    in_target_not_source_count = in_target_not_source_df.count()
-    in_target_not_source_samples = [r.asDict() for r in in_target_not_source_df.limit(10).collect()]
+    # Get except_all samples - handle both dict (bidirectional) and list formats
+    if isinstance(except_all_samples, dict) and "in_source_not_target" in except_all_samples:
+        # Already in bidirectional format from validate_rows
+        in_source_not_target_samples = except_all_samples.get("in_source_not_target", {}).get("samples", [])
+        in_target_not_source_samples = except_all_samples.get("in_target_not_source", {}).get("samples", [])
+        in_target_not_source_count = except_all_samples.get("in_target_not_source", {}).get("count", 0)
+        print(f"Using bidirectional samples from validation run")
+    else:
+        # Old format - simple list of samples from source not in target
+        in_source_not_target_samples = except_all_samples if isinstance(except_all_samples, list) else []
+        
+        # Get the reverse: rows in target not in source
+        in_target_not_source_df = tgt_df.exceptAll(src_df)
+        in_target_not_source_count = in_target_not_source_df.count()
+        in_target_not_source_samples = [r.asDict() for r in in_target_not_source_df.limit(10).collect()]
     
     print(f"In source not in target: {rows_different} rows")
     print(f"In target not in source: {in_target_not_source_count} rows")
@@ -193,11 +200,11 @@ def run_except_all_count_analysis(result: dict) -> dict | None:
         "column_differences": column_differences,
         "in_source_not_target": {
             "count": rows_different,
-            "samples": in_source_not_target_samples[:10]  # Limit to 10
+            "samples": in_source_not_target_samples[:10] if in_source_not_target_samples else []  # Limit to 10
         },
         "in_target_not_source": {
             "count": in_target_not_source_count,
-            "samples": in_target_not_source_samples
+            "samples": in_target_not_source_samples[:10] if in_target_not_source_samples else []  # Limit to 10
         }
     }
 
