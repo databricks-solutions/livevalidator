@@ -117,29 +117,6 @@ def run_except_all(src_df: DataFrame, tgt_df: DataFrame) -> DataFrame:
     """Find rows in source not in target using EXCEPT ALL"""
     return src_df.exceptAll(tgt_df)
 
-def run_except_all_bidirectional(src_df: DataFrame, tgt_df: DataFrame) -> dict:
-    """Get bidirectional except_all samples for row count mismatch analysis"""
-    # Source not in target
-    in_source_not_target_df = src_df.exceptAll(tgt_df)
-    in_source_not_target_count = in_source_not_target_df.count()
-    in_source_not_target_samples = [r.asDict() for r in in_source_not_target_df.limit(10).collect()]
-    
-    # Target not in source
-    in_target_not_source_df = tgt_df.exceptAll(src_df)
-    in_target_not_source_count = in_target_not_source_df.count()
-    in_target_not_source_samples = [r.asDict() for r in in_target_not_source_df.limit(10).collect()]
-    
-    return {
-        "in_source_not_target": {
-            "count": in_source_not_target_count,
-            "samples": in_source_not_target_samples
-        },
-        "in_target_not_source": {
-            "count": in_target_not_source_count,
-            "samples": in_target_not_source_samples
-        }
-    }
-
 def run_pk_compare(src_df: DataFrame, tgt_df: DataFrame, pk: list[str]) -> DataFrame:
     """Find rows with PK matches but different values using hash comparison"""
     def rowhash_exact(df: DataFrame) -> DataFrame:

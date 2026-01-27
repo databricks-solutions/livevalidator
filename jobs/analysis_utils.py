@@ -3,6 +3,39 @@
 from pyspark.sql import DataFrame
 
 
+def _run_except_all_bidirectional(src_df: DataFrame, tgt_df: DataFrame) -> dict:
+    """
+    Helper: Get bidirectional except_all samples using cached dataframes.
+    
+    Args:
+        src_df: Cached source dataframe from validation run
+        tgt_df: Cached target dataframe from validation run
+    
+    Returns:
+        Dict with in_source_not_target and in_target_not_source counts and samples
+    """
+    # Source not in target
+    in_source_not_target_df = src_df.exceptAll(tgt_df)
+    in_source_not_target_count = in_source_not_target_df.count()
+    in_source_not_target_samples = [r.asDict() for r in in_source_not_target_df.limit(10).collect()]
+    
+    # Target not in source
+    in_target_not_source_df = tgt_df.exceptAll(src_df)
+    in_target_not_source_count = in_target_not_source_df.count()
+    in_target_not_source_samples = [r.asDict() for r in in_target_not_source_df.limit(10).collect()]
+    
+    return {
+        "in_source_not_target": {
+            "count": in_source_not_target_count,
+            "samples": in_source_not_target_samples
+        },
+        "in_target_not_source": {
+            "count": in_target_not_source_count,
+            "samples": in_target_not_source_samples
+        }
+    }
+
+
 def run_except_all_count_analysis(result: dict) -> dict | None:
     """
     Analyze row count mismatch for except_all mode.
@@ -18,7 +51,6 @@ def run_except_all_count_analysis(result: dict) -> dict | None:
     Returns:
         Analysis dict with mode/data structure, or None if not applicable
     """
-    from run_validation import run_except_all_bidirectional  # noqa: PLC0415
     from pk_analysis import summarize_df  # noqa: PLC0415
     
     src_df: DataFrame = result.get("src_df")
@@ -101,8 +133,8 @@ def run_except_all_count_analysis(result: dict) -> dict | None:
     
     print(f"Found {len(column_differences)} columns with differing statistics")
     
-    # Get bidirectional except_all samples
-    bidirectional_samples = run_except_all_bidirectional(src_df, tgt_df)
+    # Get bidirectional except_all samples using cached dataframes
+    bidirectional_samples = _run_except_all_bidirectional(src_df, tgt_df)
     
     print(f"In source not in target: {rows_different} rows")
     print(f"In target not in source: {bidirectional_samples['in_target_not_source']['count']} rows")
