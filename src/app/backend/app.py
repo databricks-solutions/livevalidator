@@ -22,6 +22,16 @@ from backend.models import (
 )
 from backend.default_transformations import get_default_transformation
 
+def serialize_row(row) -> dict:
+    """Convert a database row to a JSON-serializable dict (handles datetime)."""
+    if row is None:
+        return None
+    result = dict(row)
+    for k, v in result.items():
+        if isinstance(v, datetime):
+            result[k] = v.isoformat()
+    return result
+
 app = FastAPI(title="LiveValidator Control Plane API", version="0.1")
 
 # Keep API isolated under /api so SPA routing can own "/"
@@ -779,8 +789,8 @@ async def update_schedule(id: int, body: ScheduleUpdate):
     user_email, body.version)
     if not row:
         current = await fetchrow("SELECT * FROM control.schedules WHERE id=$1", id)
-        raise HTTPException(status_code=409, detail={"error":"version_conflict", "current": dict(current) if current else None})
-    return dict(row)
+        raise HTTPException(status_code=409, detail={"error":"version_conflict", "current": serialize_row(current) if current else None})
+    return serialize_row(row)
 
 @api.delete("/schedules/{id}")
 async def delete_schedule(id: int):
@@ -907,21 +917,26 @@ async def create_triggers_bulk(triggers: list[TriggerIn]):
     requested_bys = [t.requested_by or user_email for t in triggers]
     params_json = [json.dumps(t.params) if isinstance(t.params, (dict, list)) else t.params for t in triggers]
     
-    # Bulk INSERT using unnest() - clean and efficient
+    # Bulk INSERT using unnest() with JOINs to filter active entities
     rows = await fetch("""
         INSERT INTO control.triggers (
             source, schedule_id, entity_type, entity_id,
             priority, requested_by, requested_at, params
         )
-        SELECT source, schedule_id, entity_type, entity_id, priority, requested_by, now(), params::jsonb
+        SELECT t.source, t.schedule_id, t.entity_type, t.entity_id, t.priority, t.requested_by, now(), t.params::jsonb
         FROM unnest($1::text[], $2::bigint[], $3::text[], $4::bigint[], $5::int[], $6::text[], $7::text[])
             AS t(source, schedule_id, entity_type, entity_id, priority, requested_by, params)
+        -- Entity must be marked as active
+        LEFT JOIN control.datasets d ON t.entity_type = 'table' AND d.id = t.entity_id AND d.is_active = TRUE
+        LEFT JOIN control.compare_queries q ON t.entity_type = 'compare_query' AND q.id = t.entity_id AND q.is_active = TRUE
+        -- Entity must be not already in the queue
         WHERE NOT EXISTS (
-            SELECT 1 FROM control.triggers
-            WHERE entity_type = t.entity_type 
-            AND entity_id = t.entity_id 
-            AND status IN ('queued', 'running')
+            SELECT 1 FROM control.triggers tr
+            WHERE tr.entity_type = t.entity_type 
+            AND tr.entity_id = t.entity_id 
+            AND tr.status IN ('queued', 'running')
         )
+        AND (d.id IS NOT NULL OR q.id IS NOT NULL)  
         RETURNING *
     """, sources, schedule_ids, entity_types, entity_ids, priorities, requested_bys, params_json)
     
