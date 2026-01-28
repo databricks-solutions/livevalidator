@@ -71,7 +71,6 @@ client = BackendAPIClient(backend_api_url=backend_api_url)
 print(f"Starting: {name} (trigger_id={trigger_id or 'manual'})")
 
 # COMMAND ----------
-# DBTITLE 1,Schema and Count Validation
 
 def validate_schema(src_df: DataFrame, tgt_df: DataFrame, exclude: list[str]) -> dict:
     """Compare column names"""
