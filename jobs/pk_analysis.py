@@ -64,21 +64,33 @@ def run_pk_count_analysis(result: dict) -> dict | None:
     
     Args:
         result: Validation result dict containing src_df, tgt_df, pk_columns,
-                row_count_source, row_count_target
+                row_count_source, row_count_target, source_was_limited
     
     Returns:
-        Analysis dict or None if not applicable
+        Analysis dict or None if skipped/not applicable
     """
     from pyspark.sql.functions import col  # noqa: PLC0415
     
     pk_columns: list[str] = result.get("pk_columns", [])
     src_df: DataFrame = result.get("src_df")
     tgt_df: DataFrame = result.get("tgt_df")
+    source_was_limited: bool = result.get("source_was_limited", False)
     row_count_source: int = result.get("row_count_source", 0)
     row_count_target: int = result.get("row_count_target", 0)
     
     if not all([src_df, tgt_df, pk_columns]):
         return None
+    
+    # Skip if source was limited and source < target (unreliable results)
+    if source_was_limited and row_count_source < row_count_target:
+        print("Skipping analysis: source was limited and source_count < target_count")
+        return {
+            "mode": "row_count_mismatch",
+            "data": {
+                "skipped": True,
+                "reason": "source_limited_and_fewer"
+            }
+        }
     
     # Select only PK columns for the join to avoid column name collisions
     src_pks = src_df.select(*pk_columns)

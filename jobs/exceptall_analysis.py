@@ -14,7 +14,7 @@ def run_except_all_count_analysis(result: dict) -> dict | None:
 
     Args:
         result: Validation result dict containing src_df, tgt_df,
-                row_count_source, row_count_target, rows_different,
+                row_count_source, row_count_target, source_was_limited, rows_different,
                 sample_differences (already computed in source not in target direction)
 
     Returns:
@@ -22,6 +22,7 @@ def run_except_all_count_analysis(result: dict) -> dict | None:
     """
     src_df: DataFrame = result.get("src_df")
     tgt_df: DataFrame = result.get("tgt_df")
+    source_was_limited: bool = result.get("source_was_limited", False)
     row_count_source: int = result.get("row_count_source", 0)
     row_count_target: int = result.get("row_count_target", 0)
     rows_different: int = result.get("rows_different", 0)
@@ -32,6 +33,17 @@ def run_except_all_count_analysis(result: dict) -> dict | None:
 
     if not all([src_df, tgt_df]):
         return None
+    
+    # Skip if source was limited and source < target (unreliable results)
+    if source_was_limited and row_count_source < row_count_target:
+        print("Skipping analysis: source was limited and source_count < target_count")
+        return {
+            "mode": "row_count_mismatch_except_all",
+            "data": {
+                "skipped": True,
+                "reason": "source_limited_and_fewer"
+            }
+        }
     
     print("Analyzing column statistics for except_all row count mismatch...")
     

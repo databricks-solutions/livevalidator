@@ -256,10 +256,12 @@ try:
     result.update(count_result)
 
     # Step 5: Apply max_rows limit if configured
+    result["source_was_limited"] = False
     if src_conn["system"]["max_rows"] and count_result["rows_compared"] > src_conn["system"]["max_rows"]:
         print(f"Limiting source system {source_system_name} for row value check...")
         src_df = src_df.limit(src_conn["system"]["max_rows"])
         result["rows_compared"] = src_conn["system"]["max_rows"]
+        result["source_was_limited"] = True
     if tgt_conn["system"]["max_rows"]:
         print(f"Ignoring target system max row limit of '{tgt_conn['system']['max_rows']}', can only be applied to source system...")
     
