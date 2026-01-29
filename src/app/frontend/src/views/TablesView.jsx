@@ -14,6 +14,7 @@ export function TablesView({
   onEdit, 
   onDelete, 
   onTrigger,
+  onBulkTrigger,
   onUploadCSV,
   onClearError,
   renderCell,
@@ -137,7 +138,7 @@ export function TablesView({
 
   // Bulk actions
   const handleBulkTrigger = () => {
-    selectedIds.forEach(id => onTrigger('table', id));
+    onBulkTrigger(Array.from(selectedIds));
     setSelectedIds(new Set());
   };
 
@@ -437,17 +438,17 @@ export function TablesView({
                       onChange={(e) => handleSelectAll(e.target.checked)}
                     />
                   </th>
-                  <th className="text-center px-2 py-1.5 text-sm text-gray-300 font-semibold w-12">Status</th>
-                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold max-w-xs">Table</th>
-                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold w-32">Last Run</th>
-                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold w-40">Source</th>
-                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold w-40">Target</th>
-                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold">Compare Mode</th>
-                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold">PK Columns</th>
-                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold">Exclude Columns</th>
-                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold">Schedules</th>
-                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold">Tags</th>
-                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold">Actions</th>
+                  <th className="text-center px-2 py-1.5 text-sm text-gray-300 font-semibold w-16">Status</th>
+                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold">Table</th>
+                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold w-24">Last Run</th>
+                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold">Source</th>
+                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold">Target</th>
+                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold w-24">Compare Mode</th>
+                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold" style={{ maxWidth: '200px' }}>PK Columns</th>
+                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold" style={{ maxWidth: '250px' }}>Exclude Columns</th>
+                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold w-20">Schedules</th>
+                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold w-24">Tags</th>
+                  <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold w-20">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -532,8 +533,8 @@ export function TablesView({
                     <td className="px-2 py-1 text-gray-100 text-sm w-40">{renderCell('tables', row, 'src_system_id', systems)}</td>
                     <td className="px-2 py-1 text-gray-100 text-sm w-40">{renderCell('tables', row, 'tgt_system_id', systems)}</td>
                     <td className="px-2 py-1 text-gray-300 text-sm whitespace-nowrap">{row.compare_mode}</td>
-                    <td className="px-2 py-1 text-gray-300 text-sm">{row.pk_columns?.join(', ') || '-'}</td>
-                    <td className="px-2 py-1 text-gray-300 text-sm">{row.exclude_columns?.join(', ') || '-'}</td>
+                    <td className="px-2 py-1 text-gray-300 text-sm" style={{ maxWidth: '200px' }}>{row.pk_columns?.join(', ') || '-'}</td>
+                    <td className="px-2 py-1 text-gray-300 text-sm" style={{ maxWidth: '250px' }}>{row.exclude_columns?.join(', ') || '-'}</td>
                     <td className="px-2 py-1 text-purple-400 text-sm">{scheduleNames || '-'}</td>
                     <td className="px-2 py-1">
                       <TagList tags={parseTags(row.tags)} maxVisible={3} />

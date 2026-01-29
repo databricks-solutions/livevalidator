@@ -50,7 +50,8 @@ export function ValidationResultsTable({
   sortConfig,
   onSort,
   emptyMessage = "No results to display",
-  maxHeight = 500,
+  maxHeight = null,
+  fillHeight = false,
 }) {
   const SortableHeader = ({ label, sortKey, className = "" }) => {
     if (!sortable) {
@@ -78,7 +79,10 @@ export function ValidationResultsTable({
   };
 
   return (
-    <div className="overflow-x-auto" style={{ maxHeight: `${maxHeight}px` }}>
+    <div 
+      className={`overflow-x-auto overflow-y-auto ${fillHeight ? 'flex-1 min-h-0' : ''}`} 
+      style={maxHeight ? { maxHeight: `${maxHeight}px` } : undefined}
+    >
       <table className="w-full min-w-[1200px]">
         <thead className="sticky top-0 bg-charcoal-400 border-b border-charcoal-200">
           <tr>

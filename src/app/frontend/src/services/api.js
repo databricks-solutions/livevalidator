@@ -111,6 +111,11 @@ export const triggerService = {
   create: (entityType, entityId) => 
     apiCall("POST", "/api/triggers", { entity_type: entityType, entity_id: entityId }),
   cancel: (id) => apiCall("DELETE", `/api/triggers/${id}`),
+  launch: (id) => apiCall("POST", `/api/triggers/${id}/launch`),
+  repair: (id) => apiCall("POST", `/api/triggers/${id}/repair`),
+  bulkRepair: (triggerIds) => apiCall("POST", "/api/triggers/bulk-repair", { trigger_ids: triggerIds }),
+  bulkLaunch: (triggerIds) => apiCall("POST", "/api/triggers/bulk-launch", { trigger_ids: triggerIds }),
+  bulkCancel: (triggerIds) => Promise.all(triggerIds.map(id => apiCall("DELETE", `/api/triggers/${id}`))),
   queueStatus: () => fetch("/api/queue-status").then(r => r.json()),
 };
 

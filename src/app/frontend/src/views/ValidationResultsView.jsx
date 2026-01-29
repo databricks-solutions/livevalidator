@@ -394,7 +394,7 @@ export function ValidationResultsView({ data, loading, error, onClearError, high
       </div>
 
       {loading ? <p className="text-gray-400">Loading…</p> : (
-        <div className="bg-charcoal-500 border border-charcoal-200 rounded-lg">
+        <div className="bg-charcoal-500 border border-charcoal-200 rounded-lg flex flex-col" style={{ minHeight: 'calc(100vh - 380px)' }}>
           {/* Date Range Filter */}
           <div className="p-2 bg-charcoal-400 border-b border-charcoal-200">
             <div className="flex flex-wrap items-center gap-2">
@@ -555,7 +555,7 @@ export function ValidationResultsView({ data, loading, error, onClearError, high
             emptyMessage={data.length === 0 
               ? "No validation history yet. Run a validation from Tables or Queries!" 
               : "No results match the current filters."}
-            maxHeight={800}
+            fillHeight={true}
           />
         </div>
       )}
