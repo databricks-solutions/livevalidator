@@ -352,7 +352,7 @@ if compare_mode == "except_all" and not result["row_count_match"] and history_id
     except_all_count_analysis = run_except_all_count_analysis(result)
     if except_all_count_analysis:
         # Overwrite sample_differences with the full analysis (contains samples + column analysis)
-        api_call("PATCH", f"/api/validation-history/{history_id}", {"sample_differences": except_all_count_analysis})
+        client.api_call("PATCH", f"/api/validation-history/{history_id}", {"sample_differences": except_all_count_analysis})
         print(f"Updated validation history {history_id} with except_all count analysis")
     dbutils.notebook.exit("Validation failed - Row count mismatch")
 
@@ -383,4 +383,4 @@ sample_df.display()
 pk_sample_differences: dict | None = run_pk_analysis(result)
 if pk_sample_differences:
     client.api_call("PATCH", f"/api/validation-history/{history_id}", {"sample_differences": pk_sample_differences})
-    print(f"Updated validation history {history_id} with PK analysis ({len(pk_sample_differences['samples'])} samples)")
+    print(f"Updated validation history {history_id} with PK analysis ({len(pk_sample_differences['data']['samples'])} samples)")
