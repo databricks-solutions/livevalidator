@@ -173,6 +173,15 @@ class TriggerIn(BaseModel):
     params: dict = Field(default_factory=dict)
 
 
+class BulkRepairRequest(BaseModel):
+    trigger_ids: list[int]
+
+
+class BulkTriggerRequest(BaseModel):
+    entity_type: str
+    entity_ids: list[int]
+
+
 # ---------- Systems ----------
 class SystemIn(BaseModel):
     name: str

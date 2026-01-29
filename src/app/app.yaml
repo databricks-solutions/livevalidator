@@ -4,6 +4,10 @@ command:
   - "--workers"
   - "4"
 
+env:
+  - name: VALIDATION_JOB_ID
+    valueFrom: 'run-validation'
+
 # Allow service principals and jobs to access the app
 permissions:
   - service_principal_name: live-validator-runner

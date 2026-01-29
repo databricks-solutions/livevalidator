@@ -7,14 +7,14 @@ resources:
         - task_key: validate
           notebook_task:
             notebook_path: ../jobs/run_validation.py
-            base_parameters:
-              backend_api_url: ${resources.apps.live_validator.url}
           timeout_seconds: 3600
           disable_auto_optimization: true
           existing_cluster_id: ${resources.clusters.live_validator_cluster.id}
       
       max_concurrent_runs: 150
       parameters:
+        - name: backend_api_url
+          default: ""
         - name: trigger_id
           default: ""
         - name: name

@@ -1,15 +1,48 @@
 from collections.abc import Callable
 from typing import Any
 from pyspark.sql import DataFrame, SparkSession
+from databricks.sdk.runtime import dbutils
 
 import sys
 import os
 sys.path.append(os.path.abspath('.'))
-from connections import api_call
+from backend_api_client import BackendAPIClient
 
-def get_type_transformations(source_system_id: int, target_system_id: int) -> tuple[str, str]:
+
+def get_connection_info(system_name: str, backend_client: BackendAPIClient) -> dict:
+    """Fetch system and prepare connection info"""
+    system: dict = backend_client.api_call("GET", f"/api/systems/name/{system_name}")
+    
+    if system["kind"] == "Databricks":
+        return {"type": "catalog", "catalog": system.get("catalog"), "system": system}
+    
+    jdbc_str: str
+    if system["jdbc_string"]:
+        jdbc_str = system["jdbc_string"]
+    else:
+        match system["kind"]:
+            case "Teradata":
+                jdbc_str = f"jdbc:teradata://{system['host']}"
+            case "Oracle":
+                jdbc_str = f"jdbc:oracle:thin:@//{system['host']}:{system['port']}/{system['database']}"
+            case "SQLServer":
+                jdbc_str = f"jdbc:sqlserver://{system['host']}:{system['port']};databaseName={system['database']};encrypt=true;trustServerCertificate=true"
+            case _:
+                jdbc_str = f"jdbc:{system['kind'].lower()}://{system['host']}:{system['port']}/{system['database']}"
+        print(f"Generated {system['kind']} JDBC string: {jdbc_str}")
+
+    scope: str = system.get("secret_scope") or "livevalidator"
+    return {
+        "type": "jdbc",
+        "jdbc_string": jdbc_str,
+        "username": dbutils.secrets.get(scope, system["user_secret_key"]) if system.get("user_secret_key") else None,
+        "password": dbutils.secrets.get(scope, system["pass_secret_key"]) if system.get("pass_secret_key") else None,
+        "system": system
+    }
+
+def get_type_transformations(source_system_id: int, target_system_id: int, backend_client: BackendAPIClient) -> tuple[str, str]:
     """Fetch type transformation functions for a system pair. Empty strings mean no transformation."""
-    data: dict = api_call("GET", f"/api/type-transformations/for-validation/{source_system_id}/{target_system_id}")
+    data: dict = backend_client.api_call("GET", f"/api/type-transformations/for-validation/{source_system_id}/{target_system_id}")
     return data.get('system_a_function', ''), data.get('system_b_function', '')
 
 def query_jdbc(conn_info: dict, query: str) -> DataFrame:

@@ -7,6 +7,7 @@ from zoneinfo import available_timezones
 from contextvars import ContextVar
 
 from fastapi import FastAPI, APIRouter, HTTPException, Response, Request
+from databricks.sdk import WorkspaceClient
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -17,7 +18,7 @@ from backend.models import (
     TableIn, TableUpdate, BulkTableItem, BulkTableRequest,
     QueryIn, QueryUpdate, BulkQueryItem, BulkQueryRequest,
     ScheduleIn, ScheduleUpdate, BindingIn,
-    TriggerIn, SystemIn, SystemUpdate,
+    TriggerIn, BulkRepairRequest, BulkTriggerRequest, SystemIn, SystemUpdate,
     TypeTransformationIn, TypeTransformationUpdate, ValidatePythonCode
 )
 from backend.default_transformations import get_default_transformation
@@ -31,6 +32,176 @@ def serialize_row(row) -> dict:
         if isinstance(v, datetime):
             result[k] = v.isoformat()
     return result
+
+
+# ---------- Job Launch Helpers ----------
+
+async def get_enriched_trigger(trigger_id: int) -> dict | None:
+    """
+    Get trigger with full entity details for job launch.
+    Returns enriched dict with all fields needed by validation job.
+    """
+    trigger = await fetchrow("SELECT * FROM control.triggers WHERE id=$1", trigger_id)
+    if not trigger:
+        return None
+    
+    # Fetch entity details
+    if trigger['entity_type'] == 'table':
+        entity = await fetchrow("SELECT * FROM control.datasets WHERE id=$1", trigger['entity_id'])
+    else:
+        entity = await fetchrow("SELECT * FROM control.compare_queries WHERE id=$1", trigger['entity_id'])
+    
+    if not entity:
+        return None
+    
+    # Fetch system names
+    src_system = await fetchrow("SELECT * FROM control.systems WHERE id=$1", entity['src_system_id'])
+    tgt_system = await fetchrow("SELECT * FROM control.systems WHERE id=$1", entity['tgt_system_id'])
+    
+    # Build enriched result
+    result = dict(entity)
+    result["id"] = trigger["id"]
+    result["entity_type"] = trigger["entity_type"]
+    result["entity_id"] = trigger["entity_id"]
+    result["src_system_id"] = entity["src_system_id"]
+    result["tgt_system_id"] = entity["tgt_system_id"]
+    if trigger["entity_type"] == 'table':
+        result["source_table"] = f"{entity['src_schema'].strip()}.{entity['src_table'].strip()}"
+        result["target_table"] = f"{entity['tgt_schema'].strip()}.{entity['tgt_table'].strip()}"
+    result["watermark_expr"] = entity.get('watermark_filter', '')
+    result["src_system_name"] = src_system["name"] if src_system else "unknown"
+    result["tgt_system_name"] = tgt_system["name"] if tgt_system else "unknown"
+    result["config_overrides"] = entity.get("config_overrides")
+    
+    return result
+
+
+async def check_system_concurrency(src_system_id: int, tgt_system_id: int) -> tuple[bool, str]:
+    """
+    Check if job can be launched based on system concurrency limits.
+    Each system is checked independently against its own limit.
+    Returns (can_launch, reason).
+    """
+    # Get system concurrency limits
+    src_system = await fetchrow("SELECT name, concurrency FROM control.systems WHERE id=$1", src_system_id)
+    tgt_system = await fetchrow("SELECT name, concurrency FROM control.systems WHERE id=$1", tgt_system_id)
+    
+    src_limit = src_system["concurrency"] if src_system else -1
+    tgt_limit = tgt_system["concurrency"] if tgt_system else -1
+    
+    # If both unlimited, no need to check
+    if src_limit == -1 and tgt_limit == -1:
+        return True, ""
+    
+    # Get running counts per system
+    rows = await fetch("""
+        WITH running_tables AS (
+            SELECT d.src_system_id, d.tgt_system_id
+            FROM control.triggers t
+            JOIN control.datasets d ON t.entity_id = d.id
+            WHERE t.status = 'running' AND t.entity_type = 'table'
+        ),
+        running_queries AS (
+            SELECT q.src_system_id, q.tgt_system_id
+            FROM control.triggers t
+            JOIN control.compare_queries q ON t.entity_id = q.id
+            WHERE t.status = 'running' AND t.entity_type = 'compare_query'
+        ),
+        all_running AS (
+            SELECT src_system_id as system_id FROM running_tables
+            UNION ALL SELECT tgt_system_id FROM running_tables
+            UNION ALL SELECT src_system_id FROM running_queries
+            UNION ALL SELECT tgt_system_id FROM running_queries
+        )
+        SELECT system_id, COUNT(*) as count FROM all_running
+        WHERE system_id IN ($1, $2) GROUP BY system_id
+    """, src_system_id, tgt_system_id)
+    
+    running_counts = {row['system_id']: int(row['count']) for row in rows}
+    
+    # Check each system independently against its own limit
+    src_running = running_counts.get(src_system_id, 0)
+    tgt_running = running_counts.get(tgt_system_id, 0)
+    
+    if src_limit != -1 and src_running >= src_limit:
+        src_name = src_system["name"] if src_system else f"System {src_system_id}"
+        return False, f"{src_name} at capacity ({src_running}/{src_limit})"
+    
+    if tgt_limit != -1 and tgt_running >= tgt_limit:
+        tgt_name = tgt_system["name"] if tgt_system else f"System {tgt_system_id}"
+        return False, f"{tgt_name} at capacity ({tgt_running}/{tgt_limit})"
+    
+    return True, ""
+
+
+async def launch_validation_job(trigger_id: int) -> dict:
+    """
+    Launch a Databricks validation job for the given trigger.
+    Returns dict with run_id and run_url on success.
+    Raises HTTPException on failure.
+    """
+    enriched = await get_enriched_trigger(trigger_id)
+    if not enriched:
+        raise HTTPException(status_code=404, detail="Trigger or entity not found")
+    
+    # Fetch validation config and apply overrides
+    config_row = await fetchrow("SELECT * FROM control.validation_config WHERE id = 1")
+    resolved_config = dict(config_row) if config_row else {
+        "downgrade_unicode": False,
+        "replace_special_char": [],
+        "extra_replace_regex": ""
+    }
+    if enriched.get("config_overrides"):
+        resolved_config.update(enriched["config_overrides"])
+    
+    # Build job parameters (same as job_sentinel)
+    is_table = enriched["entity_type"] == "table"
+    params = {
+        "trigger_id": str(trigger_id),
+        "name": enriched.get("name", ""),
+        "source_system_name": str(enriched["src_system_name"]),
+        "target_system_name": str(enriched["tgt_system_name"]),
+        "backend_api_url": os.environ.get("DATABRICKS_APP_URL", ""),
+        "source_table": enriched.get("source_table", "") if is_table else "",
+        "target_table": enriched.get("target_table", "") if is_table else "",
+        "sql": enriched.get("sql", "") if not is_table else "",
+        "watermark_expr": enriched.get("watermark_expr", "") or "",
+        "compare_mode": enriched.get("compare_mode", "except_all"),
+        "pk_columns": json.dumps(enriched.get("pk_columns") or []),
+        "include_columns": json.dumps(enriched.get("include_columns") or []),
+        "exclude_columns": json.dumps(enriched.get("exclude_columns") or []),
+        "options": json.dumps(enriched.get("options") or {}),
+        "downgrade_unicode": str(resolved_config.get("downgrade_unicode", False)).lower(),
+        "replace_special_char": json.dumps(resolved_config.get("replace_special_char", [])),
+        "extra_replace_regex": resolved_config.get("extra_replace_regex", "")
+    }
+    
+    # Get job ID from environment
+    job_id = os.environ.get("VALIDATION_JOB_ID")
+    if not job_id:
+        raise HTTPException(status_code=500, detail="VALIDATION_JOB_ID not configured")
+    
+    try:
+        # WorkspaceClient auto-picks up app service principal creds
+        w = WorkspaceClient()
+        run = w.jobs.run_now(job_id=int(job_id), job_parameters=params)
+        run_url = f"{w.config.host}/jobs/{job_id}/runs/{run.run_id}"
+        
+        # Update trigger with run info
+        await execute("""
+            UPDATE control.triggers 
+            SET status = 'running',
+                started_at = now(),
+                databricks_run_id = $2,
+                databricks_run_url = $3
+            WHERE id = $1
+        """, trigger_id, str(run.run_id), run_url)
+        
+        return {"run_id": run.run_id, "run_url": run_url}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to launch job: {str(e)}")
+
 
 app = FastAPI(title="LiveValidator Control Plane API", version="0.1")
 
@@ -767,6 +938,17 @@ async def update_schedule(id: int, body: ScheduleUpdate):
     if not await can_edit_object(user_email, 'schedules', id):
         raise HTTPException(403, "You don't have permission to edit this schedule")
     
+    # Check if cron_expr or timezone changed - if so, reset next_run_at so sentinel recalculates
+    current = await fetchrow("SELECT cron_expr, timezone FROM control.schedules WHERE id=$1", id)
+    reset_next_run = current and (
+        (body.cron_expr and body.cron_expr != current["cron_expr"]) or
+        (body.timezone and body.timezone != current["timezone"])
+    )
+    
+    next_run_at = None if reset_next_run else (
+        datetime.fromisoformat(body.next_run_at) if body.next_run_at else None
+    )
+    
     row = await fetchrow("""
         UPDATE control.schedules SET
           name = COALESCE($2, name),
@@ -776,7 +958,7 @@ async def update_schedule(id: int, body: ScheduleUpdate):
           max_concurrency = COALESCE($6, max_concurrency),
           backfill_policy = COALESCE($7, backfill_policy),
           last_run_at = COALESCE($8, last_run_at),
-          next_run_at = COALESCE($9, next_run_at),
+          next_run_at = $9,
           updated_by = $10,
           updated_at = now(),
           version = version + 1
@@ -785,8 +967,7 @@ async def update_schedule(id: int, body: ScheduleUpdate):
     """, 
     id, body.name, body.cron_expr, body.timezone, body.enabled, body.max_concurrency, body.backfill_policy, 
     datetime.fromisoformat(body.last_run_at) if body.last_run_at else None, 
-    datetime.fromisoformat(body.next_run_at) if body.next_run_at else None, 
-    user_email, body.version)
+    next_run_at, user_email, body.version)
     if not row:
         current = await fetchrow("SELECT * FROM control.schedules WHERE id=$1", id)
         raise HTTPException(status_code=409, detail={"error":"version_conflict", "current": serialize_row(current) if current else None})
@@ -825,6 +1006,42 @@ async def delete_binding(id: int):
     return {"ok": True}
 
 # ---------- Trigger now ----------
+def get_databricks_run_statuses(run_ids: list[int]) -> dict[int, dict]:
+    """Query Databricks for run statuses. Returns {run_id: {status, failed, error}}."""
+    if not run_ids:
+        return {}
+    
+    results = {}
+    try:
+        w = WorkspaceClient()
+        for run_id in run_ids:
+            try:
+                run = w.jobs.get_run(run_id=run_id)
+                state = run.state
+                # life_cycle_state: PENDING, RUNNING, TERMINATING, TERMINATED, SKIPPED, INTERNAL_ERROR
+                # result_state (when terminated): SUCCESS, FAILED, TIMEDOUT, CANCELED, etc.
+                life_cycle = state.life_cycle_state.value if state.life_cycle_state else None
+                result = state.result_state.value if state.result_state else None
+                
+                is_failed = result in ('FAILED', 'TIMEDOUT', 'CANCELED', 'MAXIMUM_CONCURRENT_RUNS_REACHED') or life_cycle == 'INTERNAL_ERROR'
+                is_done = life_cycle in ('TERMINATED', 'SKIPPED', 'INTERNAL_ERROR')
+                
+                results[run_id] = {
+                    "life_cycle_state": life_cycle,
+                    "result_state": result,
+                    "failed": is_failed,
+                    "done": is_done,
+                    "state_message": state.state_message if state.state_message else None
+                }
+            except Exception as e:
+                # Run might not exist or be accessible
+                results[run_id] = {"failed": True, "done": True, "error": str(e)}
+    except Exception:
+        pass  # If WorkspaceClient fails, return empty - don't break the endpoint
+    
+    return results
+
+
 @api.get("/triggers")
 async def list_triggers(status: Optional[str] = None):
     """
@@ -837,7 +1054,17 @@ async def list_triggers(status: Optional[str] = None):
                    CASE t.entity_type 
                      WHEN 'table' THEN d.name
                      WHEN 'compare_query' THEN q.name
-                   END as entity_name
+                   END as entity_name,
+                   COALESCE(
+                       (SELECT json_agg(tg.name ORDER BY tg.name)
+                        FROM control.entity_tags et
+                        JOIN control.tags tg ON et.tag_id = tg.id
+                        WHERE et.entity_type = CASE t.entity_type 
+                            WHEN 'table' THEN 'table'
+                            WHEN 'compare_query' THEN 'query'
+                        END AND et.entity_id = t.entity_id),
+                       '[]'::json
+                   ) as entity_tags
             FROM control.triggers t
             LEFT JOIN control.datasets d ON t.entity_type = 'table' AND t.entity_id = d.id
             LEFT JOIN control.compare_queries q ON t.entity_type = 'compare_query' AND t.entity_id = q.id
@@ -850,19 +1077,53 @@ async def list_triggers(status: Optional[str] = None):
                    CASE t.entity_type 
                      WHEN 'table' THEN d.name
                      WHEN 'compare_query' THEN q.name
-                   END as entity_name
+                   END as entity_name,
+                   COALESCE(
+                       (SELECT json_agg(tg.name ORDER BY tg.name)
+                        FROM control.entity_tags et
+                        JOIN control.tags tg ON et.tag_id = tg.id
+                        WHERE et.entity_type = CASE t.entity_type 
+                            WHEN 'table' THEN 'table'
+                            WHEN 'compare_query' THEN 'query'
+                        END AND et.entity_id = t.entity_id),
+                       '[]'::json
+                   ) as entity_tags
             FROM control.triggers t
             LEFT JOIN control.datasets d ON t.entity_type = 'table' AND t.entity_id = d.id
             LEFT JOIN control.compare_queries q ON t.entity_type = 'compare_query' AND t.entity_id = q.id
             ORDER BY t.status, t.priority ASC, t.id ASC
         """)
-    return [dict(r) for r in rows]
+    
+    # Check Databricks run status for running triggers
+    running_run_ids = [
+        int(r['databricks_run_id']) for r in rows 
+        if r['status'] == 'running' and r['databricks_run_id']
+    ]
+    run_statuses = get_databricks_run_statuses(running_run_ids)
+    
+    # Serialize and enrich with run status
+    results = []
+    for r in rows:
+        row = serialize_row(r)
+        run_id = r['databricks_run_id']
+        if run_id and int(run_id) in run_statuses:
+            row['databricks_run_status'] = run_statuses[int(run_id)]
+        results.append(row)
+    
+    return results
 
 @api.post("/triggers")
 async def create_trigger(body: TriggerIn):
     """
-    Create a new validation trigger.
-    Called by UI "Run Now" button or by scheduler.
+    Create a new validation trigger and attempt immediate launch.
+    Called by UI "Run Now" button.
+    
+    Flow:
+    1. Validate entity exists
+    2. Check for duplicate active triggers
+    3. Check concurrency limits
+       - If exceeded: create as 'queued' (sentinel or manual retry will handle)
+       - If OK: launch job, create as 'running' with run_id
     """
     user_email = get_user_email()
     await require_role('CAN_RUN', 'CAN_EDIT', 'CAN_MANAGE')
@@ -885,17 +1146,50 @@ async def create_trigger(body: TriggerIn):
     if existing:
         raise HTTPException(status_code=409, detail="Validation already queued/running for this entity")
     
-    # Create trigger
+    # Check concurrency limits
+    can_launch, reason = await check_system_concurrency(entity['src_system_id'], entity['tgt_system_id'])
+    
+    if not can_launch:
+        # Create trigger as queued - sentinel or manual retry will handle
+        row = await fetchrow("""
+            INSERT INTO control.triggers (
+                source, schedule_id, entity_type, entity_id,
+                priority, requested_by, requested_at, params, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, now(), $7, 'queued')
+            RETURNING *
+        """, body.source, body.schedule_id, body.entity_type, body.entity_id,
+             body.priority, user_email, json.dumps(body.params) if isinstance(body.params, (dict, list)) else body.params)
+        result = serialize_row(row)
+        result["queued_reason"] = reason
+        return result
+    
+    # Create trigger as running (we'll launch immediately)
     row = await fetchrow("""
         INSERT INTO control.triggers (
             source, schedule_id, entity_type, entity_id,
-            priority, requested_by, requested_at, params
-        ) VALUES ($1, $2, $3, $4, $5, $6, now(), $7)
+            priority, requested_by, requested_at, params, status, started_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, now(), $7, 'running', now())
         RETURNING *
     """, body.source, body.schedule_id, body.entity_type, body.entity_id,
          body.priority, user_email, json.dumps(body.params) if isinstance(body.params, (dict, list)) else body.params)
     
-    return dict(row)
+    trigger_id = row['id']
+    
+    try:
+        # Launch the job
+        run_info = await launch_validation_job(trigger_id)
+        result = serialize_row(row)
+        result["databricks_run_id"] = run_info["run_id"]
+        result["databricks_run_url"] = run_info["run_url"]
+        return result
+    except HTTPException as e:
+        # Launch failed - delete the trigger and propagate error
+        await execute("DELETE FROM control.triggers WHERE id=$1", trigger_id)
+        raise e
+    except Exception as e:
+        # Unexpected error - delete trigger and raise
+        await execute("DELETE FROM control.triggers WHERE id=$1", trigger_id)
+        raise HTTPException(status_code=500, detail=f"Failed to launch job: {str(e)}")
 
 @api.post("/triggers/bulk")
 async def create_triggers_bulk(triggers: list[TriggerIn]):
@@ -942,6 +1236,48 @@ async def create_triggers_bulk(triggers: list[TriggerIn]):
     
     return {"created": [dict(r) for r in rows]}
 
+
+@api.post("/triggers/bulk-create")
+async def bulk_create_triggers(body: BulkTriggerRequest):
+    """
+    Bulk create triggers with status 'running' (to prevent race with sentinel).
+    Returns immediately - caller should then launch jobs via bulk-launch.
+    """
+    await require_role('CAN_RUN', 'CAN_EDIT', 'CAN_MANAGE')
+    
+    if not body.entity_ids:
+        return {"created": [], "skipped": 0}
+    
+    user_email = get_user_email()
+    entity_type = body.entity_type
+    
+    # Bulk INSERT with status='running' to prevent sentinel race condition
+    rows = await fetch("""
+        INSERT INTO control.triggers (
+            source, entity_type, entity_id, status,
+            priority, requested_by, requested_at
+        )
+        SELECT 'manual', $1, t.entity_id, 'running', 100, $2, now()
+        FROM unnest($3::bigint[]) AS t(entity_id)
+        -- Entity must be active
+        LEFT JOIN control.datasets d ON $1 = 'table' AND d.id = t.entity_id AND d.is_active = TRUE
+        LEFT JOIN control.compare_queries q ON $1 = 'compare_query' AND q.id = t.entity_id AND q.is_active = TRUE
+        -- Not already in queue
+        WHERE NOT EXISTS (
+            SELECT 1 FROM control.triggers tr
+            WHERE tr.entity_type = $1 
+            AND tr.entity_id = t.entity_id 
+            AND tr.status IN ('queued', 'running')
+        )
+        AND (d.id IS NOT NULL OR q.id IS NOT NULL)
+        RETURNING id, entity_id
+    """, entity_type, user_email, body.entity_ids)
+    
+    created_ids = [r['id'] for r in rows]
+    skipped = len(body.entity_ids) - len(created_ids)
+    
+    return {"created": created_ids, "skipped": skipped}
+
 @api.delete("/triggers/{id}")
 async def cancel_trigger(id: int):
     """Cancel a queued or running trigger."""
@@ -951,6 +1287,228 @@ async def cancel_trigger(id: int):
     
     await execute("DELETE FROM control.triggers WHERE id=$1", id)
     return {"ok": True}
+
+
+@api.post("/triggers/{id}/launch")
+async def launch_trigger(id: int):
+    """
+    Manually launch a trigger.
+    Accepts 'queued' or 'running' (without databricks_run_id) triggers.
+    """
+    await require_role('CAN_RUN', 'CAN_EDIT', 'CAN_MANAGE')
+    
+    trigger = await fetchrow("SELECT * FROM control.triggers WHERE id=$1", id)
+    if not trigger:
+        raise HTTPException(status_code=404, detail="Trigger not found")
+    
+    # Accept 'queued' or 'running' without a run yet (bulk-created awaiting launch)
+    if trigger['status'] == 'running' and trigger['databricks_run_id']:
+        return {"launched": False, "reason": "Already running"}
+    if trigger['status'] not in ('queued', 'running'):
+        raise HTTPException(status_code=400, detail=f"Trigger cannot be launched (status: {trigger['status']})")
+    
+    # Get entity to check concurrency
+    if trigger['entity_type'] == 'table':
+        entity = await fetchrow("SELECT src_system_id, tgt_system_id FROM control.datasets WHERE id=$1", trigger['entity_id'])
+    else:
+        entity = await fetchrow("SELECT src_system_id, tgt_system_id FROM control.compare_queries WHERE id=$1", trigger['entity_id'])
+    
+    if not entity:
+        # Entity was deleted, clean up orphan
+        await execute("DELETE FROM control.triggers WHERE id=$1", id)
+        raise HTTPException(status_code=404, detail="Entity no longer exists")
+    
+    # Check concurrency
+    can_launch, reason = await check_system_concurrency(entity['src_system_id'], entity['tgt_system_id'])
+    if not can_launch:
+        return {"launched": False, "reason": reason}
+    
+    try:
+        run_info = await launch_validation_job(id)
+        return {"launched": True, "run_id": run_info["run_id"], "run_url": run_info["run_url"]}
+    except HTTPException as e:
+        return {"launched": False, "reason": e.detail}
+    except Exception as e:
+        return {"launched": False, "reason": str(e)}
+
+
+@api.post("/triggers/bulk-launch")
+async def bulk_launch_triggers(body: dict):
+    """
+    Attempt to launch multiple queued triggers.
+    Respects concurrency limits - launches as many as possible.
+    Returns results per trigger.
+    """
+    await require_role('CAN_RUN', 'CAN_EDIT', 'CAN_MANAGE')
+    
+    trigger_ids = body.get("trigger_ids", [])
+    if not trigger_ids:
+        return {"results": []}
+    
+    results = []
+    for trigger_id in trigger_ids:
+        trigger = await fetchrow("SELECT * FROM control.triggers WHERE id=$1", trigger_id)
+        if not trigger:
+            results.append({"id": trigger_id, "launched": False, "reason": "Not found"})
+            continue
+        
+        if trigger['status'] != 'queued':
+            results.append({"id": trigger_id, "launched": False, "reason": f"Not queued (status: {trigger['status']})"})
+            continue
+        
+        # Get entity
+        if trigger['entity_type'] == 'table':
+            entity = await fetchrow("SELECT src_system_id, tgt_system_id FROM control.datasets WHERE id=$1", trigger['entity_id'])
+        else:
+            entity = await fetchrow("SELECT src_system_id, tgt_system_id FROM control.compare_queries WHERE id=$1", trigger['entity_id'])
+        
+        if not entity:
+            await execute("DELETE FROM control.triggers WHERE id=$1", trigger_id)
+            results.append({"id": trigger_id, "launched": False, "reason": "Entity no longer exists"})
+            continue
+        
+        # Check concurrency
+        can_launch, reason = await check_system_concurrency(entity['src_system_id'], entity['tgt_system_id'])
+        if not can_launch:
+            results.append({"id": trigger_id, "launched": False, "reason": reason})
+            continue
+        
+        try:
+            run_info = await launch_validation_job(trigger_id)
+            results.append({"id": trigger_id, "launched": True, "run_id": run_info["run_id"], "run_url": run_info["run_url"]})
+        except Exception as e:
+            results.append({"id": trigger_id, "launched": False, "reason": str(e)})
+    
+    return {"results": results}
+
+
+@api.post("/triggers/{id}/repair")
+async def repair_trigger_run(id: int):
+    """
+    Repair a failed Databricks run for a trigger.
+    Uses repair_run to re-run all failed tasks.
+    """
+    await require_role('CAN_RUN', 'CAN_EDIT', 'CAN_MANAGE')
+    
+    trigger = await fetchrow("SELECT * FROM control.triggers WHERE id=$1", id)
+    if not trigger:
+        raise HTTPException(status_code=404, detail="Trigger not found")
+    
+    if not trigger['databricks_run_id']:
+        raise HTTPException(status_code=400, detail="No Databricks run associated with this trigger")
+    
+    job_id = os.environ.get("VALIDATION_JOB_ID")
+    if not job_id:
+        raise HTTPException(status_code=500, detail="VALIDATION_JOB_ID not configured")
+    
+    try:
+        w = WorkspaceClient()
+        run_id = int(trigger['databricks_run_id'])
+        
+        # Get run info with repair history and resolved values
+        run_info = w.jobs.get_run(run_id=run_id, include_history=True, include_resolved_values=True)
+        
+        # Extract latest_repair_id from repair history (required for subsequent repairs)
+        latest_repair_id = None
+        if run_info.repair_history:
+            latest_repair_id = run_info.repair_history[-1].id
+        
+        # Extract original job_parameters to pass to repair
+        original_params = None
+        if run_info.job_parameters:
+            original_params = {p.name: p.value for p in run_info.job_parameters}
+        
+        # Repair the run with rerun_all_failed_tasks and original parameters
+        repair_waiter = w.jobs.repair_run(
+            run_id=run_id,
+            rerun_all_failed_tasks=True,
+            latest_repair_id=latest_repair_id,
+            job_parameters=original_params
+        )
+        
+        # Get the repair_id from the response (Wait object has .response with the immediate result)
+        repair_id = repair_waiter.response.repair_id if hasattr(repair_waiter, 'response') and repair_waiter.response else None
+        
+        # Fetch updated run info to get the new run_page_url
+        updated_run = w.jobs.get_run(run_id=run_id)
+        new_run_url = updated_run.run_page_url if updated_run.run_page_url else trigger['databricks_run_url']
+        
+        # Update trigger with new URL and reset status
+        await execute("""
+            UPDATE control.triggers 
+            SET status = 'running', started_at = now(), databricks_run_url = $2
+            WHERE id = $1
+        """, id, new_run_url)
+        
+        return {
+            "repaired": True, 
+            "run_id": trigger['databricks_run_id'],
+            "repair_id": repair_id,
+            "run_url": new_run_url
+        }
+    
+    except Exception as e:
+        error_msg = str(e)
+        # Check for common errors
+        if "INVALID_STATE" in error_msg or "in progress" in error_msg.lower():
+            return {"repaired": False, "reason": "Run is still in progress. Wait for it to complete before repairing."}
+        if "not found" in error_msg.lower():
+            return {"repaired": False, "reason": "Databricks run not found. It may have been deleted."}
+        return {"repaired": False, "reason": error_msg}
+
+
+@api.post("/triggers/bulk-repair")
+async def bulk_repair_triggers(body: BulkRepairRequest):
+    """Repair multiple failed triggers."""
+    await require_role('CAN_RUN', 'CAN_EDIT', 'CAN_MANAGE')
+    
+    results = []
+    w = WorkspaceClient()
+    
+    for trigger_id in body.trigger_ids:
+        try:
+            trigger = await fetchrow("SELECT * FROM control.triggers WHERE id=$1", trigger_id)
+            if not trigger:
+                results.append({"id": trigger_id, "repaired": False, "reason": "Not found"})
+                continue
+            
+            if not trigger['databricks_run_id']:
+                results.append({"id": trigger_id, "repaired": False, "reason": "No run ID"})
+                continue
+            
+            run_id = int(trigger['databricks_run_id'])
+            run_info = w.jobs.get_run(run_id=run_id, include_history=True, include_resolved_values=True)
+            
+            latest_repair_id = None
+            if run_info.repair_history:
+                latest_repair_id = run_info.repair_history[-1].id
+            
+            original_params = None
+            if run_info.job_parameters:
+                original_params = {p.name: p.value for p in run_info.job_parameters}
+            
+            repair_waiter = w.jobs.repair_run(
+                run_id=run_id,
+                rerun_all_failed_tasks=True,
+                latest_repair_id=latest_repair_id,
+                job_parameters=original_params
+            )
+            
+            updated_run = w.jobs.get_run(run_id=run_id)
+            new_run_url = updated_run.run_page_url or trigger['databricks_run_url']
+            
+            await execute("""
+                UPDATE control.triggers 
+                SET status = 'running', started_at = now(), databricks_run_url = $2
+                WHERE id = $1
+            """, trigger_id, new_run_url)
+            
+            results.append({"id": trigger_id, "repaired": True})
+        except Exception as e:
+            results.append({"id": trigger_id, "repaired": False, "reason": str(e)})
+    
+    return {"results": results}
+
 
 @api.get("/queue-status")
 async def get_queue_status():

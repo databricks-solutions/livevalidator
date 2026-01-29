@@ -12,12 +12,19 @@
 
 import json
 import time
-import requests
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, UTC
 from zoneinfo import ZoneInfo
 from databricks.sdk import WorkspaceClient
 from croniter import croniter
 import traceback
+
+import sys
+import os
+sys.path.append(os.path.abspath('.'))
+
+from backend_api_client import BackendAPIClient
+
+# COMMAND ----------
 
 dbutils.widgets.text("backend_api_url", "")
 backend_api_url: str = dbutils.widgets.get("backend_api_url")
@@ -28,6 +35,8 @@ poll_interval: int = int(dbutils.widgets.get("poll_interval") or "30")
 dbutils.widgets.text("validation_job_id", "")
 validation_job_id: str = dbutils.widgets.get("validation_job_id")
 
+client = BackendAPIClient(backend_api_url=backend_api_url)
+
 print(f"JobSentinel starting...")
 print(f"Backend: {backend_api_url}")
 print(f"Validation Job ID: {validation_job_id}")
@@ -35,37 +44,9 @@ print(f"Poll Interval: {poll_interval}s")
 
 # COMMAND ----------
 
-_workspace_client: WorkspaceClient | None = None
-_client_created_at: datetime | None = None
-
-def get_workspace_client() -> WorkspaceClient:
-    """Get or create WorkspaceClient, refreshing hourly"""
-    global _workspace_client, _client_created_at
-    
-    if _workspace_client is None or _client_created_at is None or \
-       datetime.now(UTC) - _client_created_at > timedelta(hours=1):
-        _workspace_client = WorkspaceClient(
-            host=spark.conf.get('spark.databricks.workspaceUrl'),
-            client_id=dbutils.secrets.get(scope = "livevalidator", key = "lv-app-id"),
-            client_secret=dbutils.secrets.get(scope = "livevalidator", key = "lv-app-secret")
-            )
-        _client_created_at = datetime.now(UTC)
-    
-    return _workspace_client
-
-def api_call(method: str, endpoint: str, data: dict | list | None = None):
-    """Call backend API"""
-    client: WorkspaceClient = get_workspace_client()
-    response: requests.Response = requests.request(
-        method, f"{backend_api_url}{endpoint}", json=data, headers=client.config.authenticate(), timeout=30
-    )
-    response.raise_for_status()
-    return response.json()
-
-
 def update_schedule(schedule_id: int, version: int, **fields) -> None:
     """Update schedule fields"""
-    api_call("PUT", f"/api/schedules/{schedule_id}", {
+    client.api_call("PUT", f"/api/schedules/{schedule_id}", {
         **fields,
         "updated_by": "JobSentinel",
         "version": version
@@ -77,7 +58,7 @@ def check_and_create_scheduled_triggers() -> int:
     created: int = 0
 
     try:
-        schedules: list[dict] = api_call("GET", "/api/schedules")
+        schedules: list[dict] = client.api_call("GET", "/api/schedules")
 
         for schedule in schedules:
             if not schedule.get("enabled"):
@@ -110,7 +91,7 @@ def check_and_create_scheduled_triggers() -> int:
             print(f"Schedule '{schedule['name']}' is due")
 
             # Create triggers for all bindings
-            bindings: list[dict] = api_call("GET", f"/api/bindings_by_sched/{schedule['id']}")
+            bindings: list[dict] = client.api_call("GET", f"/api/bindings_by_sched/{schedule['id']}")
 
             if bindings:
                 # Build bulk trigger request
@@ -128,7 +109,7 @@ def check_and_create_scheduled_triggers() -> int:
                 ]
                 
                 # Bulk create triggers
-                result: dict = api_call("POST", "/api/triggers/bulk", trigger_requests)
+                result: dict = client.api_call("POST", "/api/triggers/bulk", trigger_requests)
                 num_created: int = len(result.get("created", []))
                 created += num_created
                 
@@ -155,8 +136,8 @@ def check_and_create_scheduled_triggers() -> int:
 def can_launch_job(src_system_id: int, tgt_system_id: int, running_per_system: dict) -> bool:
     """Check if job can be launched based on system concurrency limits"""
     try:
-        src_system: dict = api_call("GET", f"/api/systems/{src_system_id}")
-        tgt_system: dict = api_call("GET", f"/api/systems/{tgt_system_id}")
+        src_system: dict = client.api_call("GET", f"/api/systems/{src_system_id}")
+        tgt_system: dict = client.api_call("GET", f"/api/systems/{tgt_system_id}")
 
         # Get concurrency limits (-1 = unlimited)
         limits: list[int] = [
@@ -188,7 +169,7 @@ def can_launch_job(src_system_id: int, tgt_system_id: int, running_per_system: d
 def process_next_trigger(running_per_system: dict[int, int]) -> bool:
     """Claim and process next queued trigger"""
     try:
-        trigger: dict[str, str] = api_call("GET", "/api/triggers/next")
+        trigger: dict[str, str] = client.api_call("GET", "/api/triggers/next")
 
         if not trigger:
             return False
@@ -198,17 +179,18 @@ def process_next_trigger(running_per_system: dict[int, int]) -> bool:
         # Check concurrency limits
         if not can_launch_job(trigger["src_system_id"], trigger["tgt_system_id"], running_per_system):
             # Release trigger back to queue - can't launch yet
-            api_call("PUT", f"/api/triggers/{trigger['id']}/release", {})
+            client.api_call("PUT", f"/api/triggers/{trigger['id']}/release", {})
             return False
 
         # Fetch global validation config, then apply entity-specific overrides
-        resolved_config = api_call("GET", "/api/validation-config")
+        resolved_config = client.api_call("GET", "/api/validation-config")
         if trigger.get("config_overrides"):
             resolved_config.update(trigger.get("config_overrides"))
 
         # Build job parameters
         is_table: bool = trigger["entity_type"] == "table"
         params: dict = {
+            "backend_api_url": str(backend_api_url),
             "trigger_id": str(trigger["id"]),
             "name": trigger["name"],
             "source_system_name": str(trigger["src_system_name"]),
@@ -230,14 +212,14 @@ def process_next_trigger(running_per_system: dict[int, int]) -> bool:
 
         # Launch validation job
         print(f"Launching validation job...")
-        w: WorkspaceClient = get_workspace_client()
+        w: WorkspaceClient = client.get_workspace_client()
         run = w.jobs.run_now(job_id=validation_job_id, job_parameters=params)
         run_url: str = f"{w.config.host}/jobs/{validation_job_id}/runs/{run.run_id}"
 
         print(f"Launched {trigger["name"]}: {run_url}")
 
         # Update trigger with run info
-        api_call("PUT", f"/api/triggers/{trigger['id']}/update-run-id", {
+        client.api_call("PUT", f"/api/triggers/{trigger['id']}/update-run-id", {
             "run_id": str(run.run_id),
             "run_url": str(run_url)
         })
@@ -253,7 +235,7 @@ def process_next_trigger(running_per_system: dict[int, int]) -> bool:
 
     except Exception:
         print(f"[ERROR] Failed to process trigger: {traceback.format_exc()}\nPutting trigger back in queue...")
-        api_call("PUT", f"/api/triggers/{trigger['id']}/release", {})
+        client.api_call("PUT", f"/api/triggers/{trigger['id']}/release", {})
         return False
 
 
@@ -274,7 +256,7 @@ while True:
         created: int = check_and_create_scheduled_triggers()
 
         # Get running jobs per system for concurrency control
-        running_per_system: dict[int, int] = api_call("GET", "/api/triggers/running-per-system")
+        running_per_system: dict[int, int] = client.api_call("GET", "/api/triggers/running-per-system")
 
         # Process queued triggers
         processed: int = 0

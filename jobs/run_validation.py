@@ -18,8 +18,8 @@ import sys
 import os
 sys.path.append(os.path.abspath('.'))
 
-from connections import api_call, get_connection_info
-from data_reader import get_type_transformations, read_data, read_count
+from backend_api_client import BackendAPIClient
+from data_reader import get_type_transformations, get_connection_info, read_data, read_count
 from transformation_options import downgrade_unicode
 from pk_analysis import run_pk_analysis, run_pk_count_analysis, null_safe_join
 
@@ -65,8 +65,8 @@ replace_special_char: list[str] = json.loads(dbutils.widgets.get("replace_specia
 extra_replace_regex: str = dbutils.widgets.get("extra_replace_regex")
 options: dict = json.loads(dbutils.widgets.get("options") or "{}")
 
-# Set backend URL in spark conf for connections module
-spark.conf.set("livevalidator.backend_api_url", backend_api_url)
+# Set up client for the backend REST API calls
+client = BackendAPIClient(backend_api_url=backend_api_url)
 
 print(f"Starting: {name} (trigger_id={trigger_id or 'manual'})")
 
@@ -205,8 +205,8 @@ try:
         raise ValueError(f"Unsupported compare_mode: {compare_mode}. Must be either 'except_all' or 'primary_key'")
     
     # Step 1: Connect to systems
-    src_conn: dict = get_connection_info(source_system_name)
-    tgt_conn: dict = get_connection_info(target_system_name)
+    src_conn: dict = get_connection_info(source_system_name, client)
+    tgt_conn: dict = get_connection_info(target_system_name, client)
     
     result["source_system_id"] = src_conn["system"]["id"]
     result["target_system_id"] = tgt_conn["system"]["id"]
@@ -215,7 +215,7 @@ try:
     
     # Step 2: Read data with type transformations
     print("Reading data...")
-    src_xform_func, tgt_xform_func = get_type_transformations(src_conn["system"]["id"], tgt_conn["system"]["id"])
+    src_xform_func, tgt_xform_func = get_type_transformations(src_conn["system"]["id"], tgt_conn["system"]["id"], client)
     src_df: DataFrame = read_data(src_conn, table=source_table, query=sql, watermark_expr=watermark_expr, type_mapping_func=src_xform_func)
     tgt_df: DataFrame = read_data(tgt_conn, table=target_table, query=sql, watermark_expr=watermark_expr, type_mapping_func=tgt_xform_func)
     
@@ -285,7 +285,7 @@ except Exception as e:
     })
     
     if trigger_id:
-        api_call("PUT", f"/api/triggers/{trigger_id}/fail", {
+        client.api_call("PUT", f"/api/triggers/{trigger_id}/fail", {
             "status": result["status"],
             "error_message": str(e),
             "error_details": {"type": type(e).__name__}
@@ -303,7 +303,7 @@ if serde_result.get('src_df'):
     tgt_df = serde_result.pop('tgt_df')
     sample_df = serde_result.pop('sample_df')
 
-history_response: dict = api_call("POST", "/api/validation-history", serde_result)
+history_response: dict = client.api_call("POST", "/api/validation-history", serde_result)
 
 if result["status"] == "succeeded":
     dbutils.notebook.exit("Validation passed")
@@ -323,7 +323,7 @@ if compare_mode != "primary_key" or not history_id:
 if not result["row_count_match"]:
     pk_count_analysis = run_pk_count_analysis(result)
     if pk_count_analysis and history_id:
-        api_call("PATCH", f"/api/validation-history/{history_id}", {"sample_differences": pk_count_analysis})
+        client.api_call("PATCH", f"/api/validation-history/{history_id}", {"sample_differences": pk_count_analysis})
         if not pk_count_analysis.get("skipped"):
             print(f"Updated validation history {history_id} with PK count analysis")
     dbutils.notebook.exit("Validation failed - Row count mismatch")
@@ -336,5 +336,5 @@ sample_df.display()
 # Update validation history with PK analysis
 pk_sample_differences: dict | None = run_pk_analysis(result)
 if pk_sample_differences:
-    api_call("PATCH", f"/api/validation-history/{history_id}", {"sample_differences": pk_sample_differences})
+    client.api_call("PATCH", f"/api/validation-history/{history_id}", {"sample_differences": pk_sample_differences})
     print(f"Updated validation history {history_id} with PK analysis ({len(pk_sample_differences['samples'])} samples)")

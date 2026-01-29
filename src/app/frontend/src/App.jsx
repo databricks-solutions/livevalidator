@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
+import { flushSync } from 'react-dom';
 
 // Hooks
 import { useFetch } from './hooks/useFetch';
@@ -108,6 +109,10 @@ export default function App() {
   const [view, setView] = useState('results');
   const [conflict, setConflict] = useState(null);
   const [notification, setNotification] = useState(null); // { type: 'success' | 'error', message: string }
+  const showNotification = (message, type = 'success', details = null) => {
+    setNotification({ message, type, details });
+    if (type !== 'error') setTimeout(() => setNotification(null), 5000);
+  };
   const [highlightId, setHighlightId] = useState(null); // For highlighting specific validation run
   const [highlightEntityId, setHighlightEntityId] = useState(null); // For highlighting specific entity in tables/queries
   const [currentUser, setCurrentUser] = useState(null); // { email, role }
@@ -414,17 +419,51 @@ export default function App() {
   };
 
 
-  // Trigger now
+  // Trigger now (single)
   const triggerNow = async (entity_type, entity_id) => {
     try {
-      await apiCall("POST", `/api/triggers`, { entity_type, entity_id });
-      setNotification({ type: 'success', message: '✓ Validation queued successfully!' });
+      const result = await apiCall("POST", `/api/triggers`, { entity_type, entity_id });
+      if (result.databricks_run_id) {
+        showNotification('Validation launched', 'success');
+      } else if (result.queued_reason) {
+        showNotification(`Queued: ${result.queued_reason}`, 'warning', 'Will launch when capacity is available.');
+      } else {
+        showNotification('Validation queued', 'success');
+      }
       triggers.refresh();
       queueStats.refresh();
-      setTimeout(() => setNotification(null), 5000);
     } catch (err) {
-      setNotification({ type: 'error', message: `Error: ${err.message}` });
-      setTimeout(() => setNotification(null), 8000);
+      showNotification('Failed to trigger validation', 'error', err.message);
+    }
+  };
+
+  // Bulk trigger - creates all triggers immediately, then launches jobs silently
+  const bulkTriggerNow = async (entity_type, entity_ids) => {
+    try {
+      // Step 1: Bulk create triggers with status='running' (instant)
+      const createResult = await apiCall("POST", "/api/triggers/bulk-create", { entity_type, entity_ids });
+      const triggerIds = createResult.created;
+      const skipped = createResult.skipped;
+      
+      if (triggerIds.length === 0) {
+        showNotification(skipped > 0 ? `${skipped} already in queue` : 'No validations to trigger', 'warning');
+        return;
+      }
+      
+      // Show ONE toast and refresh
+      showNotification(`Triggered ${triggerIds.length} validations`, 'success');
+      triggers.refresh();
+      queueStats.refresh();
+      
+      // Step 2: Launch jobs silently in background (no more toasts)
+      for (const triggerId of triggerIds) {
+        try {
+          await apiCall("POST", `/api/triggers/${triggerId}/launch`);
+        } catch { /* silent */ }
+      }
+      triggers.refresh();
+    } catch (err) {
+      showNotification(`Bulk trigger failed: ${err.message}`, 'error');
     }
   };
 
@@ -497,20 +536,32 @@ export default function App() {
 
         {/* Notification Toast */}
         {notification && (
-          <div className={`fixed top-4 right-4 z-50 max-w-md rounded-lg shadow-2xl border-2 p-4 flex items-start gap-3 animate-slide-in ${
+          <div className={`fixed top-4 right-4 z-50 max-w-lg rounded-lg shadow-2xl border-2 p-4 animate-slide-in ${
             notification.type === 'success' 
               ? 'bg-green-900/95 border-green-600 text-green-100' 
+              : notification.type === 'warning'
+              ? 'bg-yellow-900/95 border-yellow-600 text-yellow-100'
               : 'bg-red-900/95 border-red-600 text-red-100'
           }`}>
-            <div className="flex-1">
-              <p className="font-medium">{notification.message}</p>
+            <div className="flex items-start gap-3">
+              <div className="flex-1">
+                <p className="font-medium">{notification.message}</p>
+                {notification.details && (
+                  <details className="mt-2">
+                    <summary className="text-sm opacity-80 cursor-pointer hover:opacity-100">View details</summary>
+                    <pre className="mt-2 text-xs bg-black/30 rounded p-2 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap break-words">
+                      {notification.details}
+                    </pre>
+                  </details>
+                )}
+              </div>
+              <button 
+                onClick={() => setNotification(null)}
+                className="text-gray-300 hover:text-white transition-colors flex-shrink-0"
+              >
+                ✕
+              </button>
             </div>
-            <button 
-              onClick={() => setNotification(null)}
-              className="text-gray-300 hover:text-white transition-colors"
-            >
-              ✕
-            </button>
           </div>
         )}
 
@@ -558,6 +609,7 @@ export default function App() {
             onEdit={setEditingTable}
             onDelete={handleDelete}
             onTrigger={triggerNow}
+            onBulkTrigger={(ids) => bulkTriggerNow('table', ids)}
             onUploadCSV={() => setUploadCSVType('tables')}
             onClearError={tbl.clearError}
             renderCell={renderCell}
@@ -599,6 +651,7 @@ export default function App() {
               triggers.refresh();
               queueStats.refresh();
             }}
+            showNotification={showNotification}
           />
         )}
 

@@ -22,6 +22,10 @@ resources:
             database_name: databricks_postgres
             instance_name: ${resources.database_instances.live_validator_database.name}
             permission: CAN_CONNECT_AND_CREATE
+        - name: run_validation
+          job:
+            id: ${resources.jobs.run_validation.id}
+            permission: 'CAN_MANAGE_RUN'
 
   database_instances:
     live_validator_database:
