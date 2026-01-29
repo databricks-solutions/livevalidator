@@ -217,7 +217,7 @@ export function ValidationResultsTable({
                       className="text-red-400 font-medium hover:text-red-300 underline decoration-dotted cursor-pointer transition-colors"
                       title="Click to view sample differences"
                     >
-                      {v.rows_different.toLocaleString()} ({v.difference_pct}%)
+                      {v.rows_different.toLocaleString()}{v.rows_compared > 0 ? ` (${v.difference_pct}%)` : ''}
                     </button>
                   ) : (
                     <span className="text-green-400">0</span>

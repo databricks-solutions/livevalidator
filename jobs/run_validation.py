@@ -188,12 +188,46 @@ def validate_rows(src_df: DataFrame, tgt_df: DataFrame, exclude: list[str], mode
             return {"rows_different": 0, "sample_differences": []}
     
     print(f"Found {diff_count} differences, extracting sample")
-    sample_df: DataFrame = diff_df.limit(10)
     
-    sample_dicts: list[dict] = [row.asDict() for row in sample_df.collect()]
-
+    # For except_all mode, always produce bidirectional structured output
     if mode == "except_all":
-        print("\n\n".join(str(row) for row in sample_dicts))
+        print("Running bidirectional exceptAll analysis...")
+        
+        # Source not in target (already computed)
+        in_source_not_target_samples = [r.asDict() for r in diff_df.limit(10).collect()]
+        
+        # Target not in source (reverse direction)
+        in_target_not_source_df = tgt_filtered.exceptAll(src_filtered)
+        in_target_not_source_count = in_target_not_source_df.count()
+        in_target_not_source_samples = [r.asDict() for r in in_target_not_source_df.limit(10).collect()]
+        
+        print(f"In source not in target: {diff_count} rows")
+        print(f"In target not in source: {in_target_not_source_count} rows")
+        
+        # Return structured format for unified sample view
+        sample_differences = {
+            "mode": "except_all_bidirectional",
+            "in_source_not_target": {
+                "count": diff_count,
+                "samples": in_source_not_target_samples
+            },
+            "in_target_not_source": {
+                "count": in_target_not_source_count,
+                "samples": in_target_not_source_samples
+            }
+        }
+        
+        return {
+            "rows_different": diff_count,
+            "sample_differences": sample_differences,
+            "src_df": src_filtered,
+            "tgt_df": tgt_filtered,
+            "sample_df": diff_df.limit(10)
+        }
+    
+    # Primary key mode - keep existing simple format
+    sample_df: DataFrame = diff_df.limit(10)
+    sample_dicts: list[dict] = [row.asDict() for row in sample_df.collect()]
     
     return {
         "rows_different": diff_count,

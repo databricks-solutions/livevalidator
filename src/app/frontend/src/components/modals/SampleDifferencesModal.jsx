@@ -253,9 +253,10 @@ export function SampleDifferencesModal({ validation, onClose }) {
   const isPKMode = samples?.mode === 'primary_key';
   const isRowCountMismatch = samples?.mode === 'row_count_mismatch';
   const isExceptAllRowCountMismatch = samples?.mode === 'row_count_mismatch_except_all';
+  const isExceptAllBidirectional = samples?.mode === 'except_all_bidirectional';
   const isExceptAllMode = Array.isArray(samples);
   const isPKPending = validation.compare_mode === 'primary_key' && isExceptAllMode;
-  const isExceptAllCountMismatch = validation.compare_mode === 'except_all' && !validation.row_count_match && !isExceptAllMode && !isExceptAllRowCountMismatch;
+  const isExceptAllCountMismatch = validation.compare_mode === 'except_all' && !validation.row_count_match && !isExceptAllMode && !isExceptAllRowCountMismatch && !isExceptAllBidirectional;
   const isPKCountPending = validation.compare_mode === 'primary_key' && !validation.row_count_match && !isRowCountMismatch;
   
   // For except_all with row count mismatch, determine which view to show based on _modalMode
@@ -319,6 +320,7 @@ export function SampleDifferencesModal({ validation, onClose }) {
           {showUnifiedSamples && <ExceptAllUnifiedSamplesView analysis={samples} validation={validation} />}
           {showColumnAnalysisOnly && <ExceptAllColumnAnalysisOnlyView analysis={samples} validation={validation} />}
           {isExceptAllRowCountMismatch && !showUnifiedSamples && !showColumnAnalysisOnly && <ExceptAllRowCountMismatchView samples={samples} validation={validation} />}
+          {isExceptAllBidirectional && <ExceptAllUnifiedSamplesView analysis={samples} validation={validation} />}
           {isPKPending && <PKModeView samples={samples} validation={validation} />}
           {isExceptAllMode && !isPKPending && !showUnifiedSamples && <ExceptAllModeView samples={samples} validation={validation} />}
           {isExceptAllCountMismatch && (
@@ -348,7 +350,7 @@ export function SampleDifferencesModal({ validation, onClose }) {
               </p>
             </div>
           )}
-          {!isPKMode && !isRowCountMismatch && !isExceptAllRowCountMismatch && !isExceptAllMode && !isExceptAllCountMismatch && !isPKCountPending && (
+          {!isPKMode && !isRowCountMismatch && !isExceptAllRowCountMismatch && !isExceptAllBidirectional && !isExceptAllMode && !isExceptAllCountMismatch && !isPKCountPending && (
             <p className="text-gray-400">No sample data available</p>
           )}
         </div>
