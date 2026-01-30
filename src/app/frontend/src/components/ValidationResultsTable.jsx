@@ -1,6 +1,40 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { TagList } from './TagBadge';
 import { Checkbox } from './Checkbox';
+
+// Error popover component
+function ErrorPopover({ error, onClose }) {
+  const [copied, setCopied] = useState(false);
+  const ref = useRef(null);
+
+  React.useEffect(() => {
+    const handleClick = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [onClose]);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(error || 'Unknown error');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div ref={ref} className="fixed z-50 bg-charcoal-500 rounded-lg shadow-xl border border-orange-700/50 p-3 w-[500px] h-[300px] flex flex-col" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
+      <pre className="flex-1 text-sm text-gray-200 whitespace-pre-wrap break-words overflow-y-auto select-all m-0 mb-2 pr-2">
+        {error || 'Unknown error'}
+      </pre>
+      <div className="flex gap-1.5 justify-end shrink-0">
+        <button onClick={handleCopy} className="px-2 py-1 text-xs rounded bg-orange-600/80 text-white hover:bg-orange-500 transition-all">
+          {copied ? '✓ Copied' : 'Copy'}
+        </button>
+        <button onClick={onClose} className="px-2 py-1 text-xs rounded bg-charcoal-300 text-gray-300 hover:bg-charcoal-200 hover:text-white transition-all">
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // Helper to safely parse tags
 const parseTags = (tags) => {
@@ -53,6 +87,8 @@ export function ValidationResultsTable({
   maxHeight = null,
   fillHeight = false,
 }) {
+  const [errorModal, setErrorModal] = useState(null);
+
   const SortableHeader = ({ label, sortKey, className = "" }) => {
     if (!sortable) {
       return (
@@ -165,12 +201,13 @@ export function ValidationResultsTable({
                       ✓ Success
                     </span>
                   ) : v.status === 'error' ? (
-                    <span 
-                      className="px-1.5 py-0.5 text-sm rounded-full bg-orange-900/40 text-orange-300 border border-orange-700 whitespace-nowrap cursor-help"
-                      title={v.error_message || 'Unknown error'}
+                    <button 
+                      onClick={() => setErrorModal(v.error_message)}
+                      className="px-1.5 py-0.5 text-sm rounded-full bg-orange-900/40 text-orange-300 border border-orange-700 whitespace-nowrap cursor-pointer hover:bg-orange-900/60 transition-colors"
+                      title="Click to view error details"
                     >
                       ⚠ Error
-                    </span>
+                    </button>
                   ) : (
                     <span className="px-1.5 py-0.5 text-sm rounded-full bg-red-900/40 text-red-300 border border-red-700 whitespace-nowrap">
                       ✗ Failed
@@ -233,6 +270,7 @@ export function ValidationResultsTable({
           )}
         </tbody>
       </table>
+      {errorModal !== null && <ErrorPopover error={errorModal} onClose={() => setErrorModal(null)} />}
     </div>
   );
 }
