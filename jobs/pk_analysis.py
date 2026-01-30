@@ -4,6 +4,11 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pyspark.sql import DataFrame
 
+import sys
+import os
+sys.path.append(os.path.abspath('.'))
+
+from analysis_utils import summarize_df
 
 def compare_pk_samples(
     src_rows: list[dict],
@@ -54,40 +59,6 @@ def null_safe_join(lhs: DataFrame, rhs: DataFrame, keys: list[str], how: str = "
         return df.select("*", *nulls_replaced)
 
     return with_join_keys(lhs).join(with_join_keys(rhs).drop(*keys), jk, how).drop(*jk)
-
-
-def summarize_df(df: DataFrame, pk_columns: list[str]) -> list[dict]:
-    """
-    Compute summary stats per column, preserving column order.
-    
-    Returns list of dicts (one per column) to preserve order:
-    [{"name": "col1", "type": "numeric", "min": ..., "max": ..., "nulls": ..., "is_pk": True}, ...]
-    """
-    from pyspark.sql.functions import col, min as spark_min, max as spark_max, countDistinct, sum as spark_sum, when  # noqa: PLC0415
-    
-    pk_set: set[str] = {pk.lower() for pk in pk_columns}
-    stats: list[dict] = []
-    for field in df.schema.fields:
-        name, dtype = field.name, str(field.dataType)
-        is_pk = name.lower() in pk_set
-        
-        null_expr = spark_sum(when(col(name).isNull(), 1).otherwise(0))
-        
-        if any(t in dtype for t in ["Int", "Long", "Double", "Decimal", "Float", "Short"]):
-            agg = df.agg(spark_min(name), spark_max(name), null_expr).collect()[0]
-            stats.append({"name": name, "type": "numeric", "is_pk": is_pk,
-                          "min": agg[0], "max": agg[1], "nulls": int(agg[2] or 0)})
-        elif any(t in dtype for t in ["Timestamp", "Date"]):
-            agg = df.agg(spark_min(name), spark_max(name), null_expr).collect()[0]
-            stats.append({"name": name, "type": "time", "is_pk": is_pk,
-                          "min": agg[0].isoformat() if agg[0] else None,
-                          "max": agg[1].isoformat() if agg[1] else None,
-                          "nulls": int(agg[2] or 0)})
-        else:
-            agg = df.agg(countDistinct(name), null_expr).collect()[0]
-            stats.append({"name": name, "type": "string", "is_pk": is_pk,
-                          "cardinality": int(agg[0] or 0), "nulls": int(agg[1] or 0)})
-    return stats
 
 
 def run_pk_count_analysis(result: dict) -> dict | None:
@@ -152,6 +123,8 @@ def run_pk_count_analysis(result: dict) -> dict | None:
     # Samples (10 each)
     missing_in_target_samples = [r.asDict() for r in missing_in_target_full.limit(10).collect()]
     missing_in_source_samples = [r.asDict() for r in missing_in_source_full.limit(10).collect()]
+
+    src_df.unpersist(), tgt_df.unpersist()
     
     return {
         "mode": "row_count_mismatch",
@@ -211,6 +184,8 @@ def run_pk_analysis(result: dict) -> dict | None:
         mismatch_df: DataFrame = spark.createDataFrame(mismatch_samples)
         mismatch_df.display()
     print(mismatch_samples)
+
+    src_df.unpersist(), tgt_df.unpersist()
 
     return {
         "mode": "primary_key",

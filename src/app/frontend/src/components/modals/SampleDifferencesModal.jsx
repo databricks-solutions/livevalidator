@@ -252,9 +252,10 @@ export function SampleDifferencesModal({ validation, onClose }) {
   
   const isPKMode = samples?.mode === 'primary_key';
   const isRowCountMismatch = samples?.mode === 'row_count_mismatch';
+  const isExceptAllCountMismatch = samples?.mode === 'row_count_mismatch_except_all';
   const isExceptAllMode = Array.isArray(samples) && samples.length > 0;
   const isPKPending = validation.compare_mode === 'primary_key' && isExceptAllMode;
-  const isExceptAllCountMismatch = validation.compare_mode === 'except_all' && !validation.row_count_match && !isExceptAllMode;
+  const isExceptAllCountPending = validation.compare_mode === 'except_all' && !validation.row_count_match && !isExceptAllMode && !isExceptAllCountMismatch;
   const isPKCountPending = validation.compare_mode === 'primary_key' && !validation.row_count_match && !isRowCountMismatch;
 
   return (
@@ -310,9 +311,10 @@ export function SampleDifferencesModal({ validation, onClose }) {
         <div className="flex-1 overflow-auto">
           {isPKMode && <PKModeView samples={samples} validation={validation} />}
           {isRowCountMismatch && <RowCountMismatchView samples={samples} validation={validation} />}
+          {isExceptAllCountMismatch && <ExceptAllCountMismatchView samples={samples} validation={validation} />}
           {isPKPending && <PKPendingView samples={samples} validation={validation} />}
           {isExceptAllMode && !isPKPending && <ExceptAllModeView samples={samples} validation={validation} />}
-          {isExceptAllCountMismatch && (
+          {isExceptAllCountPending && (
             <div className="p-4 bg-charcoal-400 border border-charcoal-300 rounded-lg">
               <p className="text-gray-300 mb-2">
                 <span className="font-semibold">Row count mismatch detected</span>
@@ -321,8 +323,7 @@ export function SampleDifferencesModal({ validation, onClose }) {
                 Source: {validation.row_count_source?.toLocaleString()} rows • Target: {validation.row_count_target?.toLocaleString()} rows
               </p>
               <p className="text-gray-500 text-sm mt-3">
-                Detailed row analysis is not available for <span className="font-mono text-gray-400">except_all</span> mode 
-                because there are no primary keys defined to identify which specific rows are missing or extra.
+                Analysis data may still be processing. Check the validation notebook for more details.
               </p>
             </div>
           )}
@@ -339,7 +340,7 @@ export function SampleDifferencesModal({ validation, onClose }) {
               </p>
             </div>
           )}
-          {!isPKMode && !isRowCountMismatch && !isExceptAllMode && !isExceptAllCountMismatch && !isPKCountPending && (
+          {!isPKMode && !isRowCountMismatch && !isExceptAllCountMismatch && !isExceptAllMode && !isExceptAllCountPending && !isPKCountPending && (
             <p className="text-gray-400">No sample data available</p>
           )}
         </div>
@@ -717,6 +718,200 @@ function RowCountMismatchView({ samples, validation }) {
         pkColumns={pkColumns}
         defaultExpanded={missing_in_target?.count === 0}
       />
+    </div>
+  );
+}
+
+/**
+ * Display for except_all row count mismatch - shows column stat differences and sample rows
+ */
+function ExceptAllCountMismatchView({ samples, validation }) {
+  if (samples.data?.skipped) {
+    return (
+      <div className="p-4 bg-yellow-900/20 border border-yellow-700 rounded">
+        <p className="text-yellow-300 text-sm font-semibold">Analysis Skipped</p>
+        <p className="text-yellow-200 text-xs mt-2">
+          Source data was limited and source count ({validation.row_count_source?.toLocaleString()}) is less than 
+          target count ({validation.row_count_target?.toLocaleString()}). Results would be unreliable.
+        </p>
+      </div>
+    );
+  }
+  
+  const { column_differences, in_source_not_target, in_target_not_source } = samples.data || {};
+  const sourceTable = validation.source_table || 'SOURCE_TABLE';
+  const targetTable = validation.target_table || 'TARGET_TABLE';
+  
+  return (
+    <div className="space-y-3">
+      {/* Header info */}
+      <div className="p-2 bg-orange-900/20 border border-orange-700 rounded">
+        <p className="text-orange-300 text-xs">
+          Row count mismatch: Source has {validation.row_count_source?.toLocaleString()} rows, 
+          Target has {validation.row_count_target?.toLocaleString()} rows 
+          (diff: {Math.abs((validation.row_count_source || 0) - (validation.row_count_target || 0)).toLocaleString()})
+        </p>
+      </div>
+      
+      {/* Column Differences */}
+      {column_differences && column_differences.length > 0 && (
+        <ColumnDifferencesSection differences={column_differences} />
+      )}
+      
+      {/* In Source Not Target */}
+      <ExceptAllDiffSection
+        title="In Source, Not in Target"
+        data={in_source_not_target}
+        tableName={sourceTable}
+        defaultExpanded={true}
+      />
+      
+      {/* In Target Not Source */}
+      <ExceptAllDiffSection
+        title="In Target, Not in Source"
+        data={in_target_not_source}
+        tableName={targetTable}
+        defaultExpanded={in_source_not_target?.count === 0}
+      />
+    </div>
+  );
+}
+
+/**
+ * Collapsible section showing column stat differences between the two diff sets
+ */
+function ColumnDifferencesSection({ differences }) {
+  const [expanded, setExpanded] = useState(true);
+  
+  if (!differences || differences.length === 0) return null;
+  
+  return (
+    <div className="border border-charcoal-300 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-3 py-2 bg-charcoal-400 flex items-center justify-between hover:bg-charcoal-400/80 transition-colors"
+      >
+        <span className="text-sm font-semibold text-gray-200">
+          {expanded ? '▼' : '▶'} Column Differences ({differences.length} columns differ)
+        </span>
+      </button>
+      
+      {expanded && (
+        <div className="p-3">
+          <p className="text-xs text-gray-400 mb-2">Comparing stats between "source-not-in-target" vs "target-not-in-source" rows</p>
+          <div className="overflow-x-auto">
+            <table className="w-full border border-charcoal-300 rounded text-xs">
+              <thead className="bg-charcoal-400">
+                <tr>
+                  <th className="px-3 py-1.5 text-left text-gray-300 font-semibold">Column</th>
+                  <th className="px-3 py-1.5 text-left text-gray-300 font-semibold">Type</th>
+                  <th className="px-3 py-1.5 text-left text-blue-300 font-semibold">Source Stats</th>
+                  <th className="px-3 py-1.5 text-left text-purple-300 font-semibold">Target Stats</th>
+                </tr>
+              </thead>
+              <tbody>
+                {differences.map((diff, idx) => (
+                  <tr key={idx} className="border-t border-charcoal-300">
+                    <td className="px-3 py-1.5 font-mono text-gray-200">{diff.column}</td>
+                    <td className="px-3 py-1.5 text-gray-400">
+                      {diff.difference_type === 'type_mismatch' 
+                        ? <span className="text-yellow-400">{diff.source?.type} → {diff.target?.type}</span>
+                        : diff.source?.type || diff.target?.type || '-'}
+                    </td>
+                    <td className="px-3 py-1.5 text-blue-200 bg-blue-900/10">
+                      {diff.source ? formatColStats(diff.source) : <span className="text-gray-500 italic">missing</span>}
+                    </td>
+                    <td className="px-3 py-1.5 text-purple-200 bg-purple-900/10">
+                      {diff.target ? formatColStats(diff.target) : <span className="text-gray-500 italic">missing</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatColStats(col) {
+  if (!col) return '-';
+  const parts = [];
+  if (col.type === 'string' && col.cardinality != null) {
+    parts.push(`${col.cardinality} unique`);
+  } else if ((col.type === 'numeric' || col.type === 'time') && (col.min != null || col.max != null)) {
+    const minStr = col.min != null ? String(col.min).slice(0, 16) : '?';
+    const maxStr = col.max != null ? String(col.max).slice(0, 16) : '?';
+    parts.push(minStr === maxStr ? minStr : `${minStr} → ${maxStr}`);
+  }
+  if (col.nulls != null && col.nulls > 0) {
+    parts.push(`${col.nulls} nulls`);
+  }
+  return parts.length > 0 ? parts.join(', ') : '-';
+}
+
+/**
+ * Collapsible section for except_all diff rows (no PKs)
+ */
+function ExceptAllDiffSection({ title, data, tableName, defaultExpanded = false }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  
+  if (!data) return null;
+  
+  const { count, samples } = data;
+  const columns = samples?.[0] ? Object.keys(samples[0]) : [];
+  
+  return (
+    <div className="border border-charcoal-300 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-3 py-2 bg-charcoal-400 flex items-center justify-between hover:bg-charcoal-400/80 transition-colors"
+      >
+        <span className="text-sm font-semibold text-gray-200">
+          {expanded ? '▼' : '▶'} {title} ({count.toLocaleString()} rows)
+        </span>
+      </button>
+      
+      {expanded && (
+        <div className="p-3">
+          {samples && samples.length > 0 ? (
+            <>
+              <p className="text-xs text-gray-400 mb-2">Samples ({samples.length} of {count.toLocaleString()})</p>
+              <div className="overflow-x-auto">
+                <table className="w-full border border-charcoal-300 rounded text-xs">
+                  <thead className="bg-charcoal-400">
+                    <tr>
+                      <th className="px-2 py-1.5 w-14 border-r border-charcoal-300"></th>
+                      {columns.map(col => (
+                        <th key={col} className="px-2 py-1.5 text-left font-semibold text-gray-300 border-r border-charcoal-300 last:border-r-0 whitespace-nowrap">
+                          {col}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {samples.map((row, idx) => (
+                      <tr key={idx} className="border-t border-charcoal-300 hover:bg-charcoal-400/50">
+                        <td className="px-2 py-1.5 border-r border-charcoal-300 text-center">
+                          <CopySqlButton tableName={tableName} row={row} />
+                        </td>
+                        {columns.map(col => (
+                          <td key={col} className="px-2 py-1.5 font-mono text-gray-200 border-r border-charcoal-300 last:border-r-0">
+                            <ExpandableCell value={row[col]} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <p className="text-gray-500 text-sm italic">No rows in this category</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

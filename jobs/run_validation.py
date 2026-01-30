@@ -22,6 +22,7 @@ from backend_api_client import BackendAPIClient
 from data_reader import get_type_transformations, get_connection_info, read_data, read_count
 from transformation_options import downgrade_unicode
 from pk_analysis import run_pk_analysis, run_pk_count_analysis, null_safe_join
+from exceptall_analysis import run_except_all_count_analysis
 
 # COMMAND ----------
 
@@ -109,6 +110,10 @@ def validate_counts(
         "row_count_match": match
     }
 
+def exclude_cols(df: DataFrame, exclude: list[str]) -> DataFrame:
+    """Exclude columns from the dataframe"""
+    return df.select([c for c in df.columns if c not in exclude])
+
 # COMMAND ----------
 # DBTITLE 1,Row-Level Validation Functions
 
@@ -135,14 +140,11 @@ def run_pk_compare(src_df: DataFrame, tgt_df: DataFrame, pk: list[str]) -> DataF
         (col("h_lhs") != col("h_rhs")) | col("h_lhs").isNull() | col("h_rhs").isNull()
     ).drop("h_lhs", "h_rhs", "__hash__")
 
-def validate_rows(src_df: DataFrame, tgt_df: DataFrame, exclude: list[str], mode: str) -> dict:
+def validate_rows(src_df: DataFrame, tgt_df: DataFrame, mode: str) -> dict:
     """Row-level validation - returns diff count and samples"""
-    cols: list[str] = [c for c in src_df.columns if c not in exclude]
-    src_filtered: DataFrame = src_df.select(*cols)
-    tgt_filtered: DataFrame = tgt_df.select(*cols)
     comparison_func: Callable = run_except_all if mode == "except_all" else lambda s, t: run_pk_compare(s, t, pk_columns)
     
-    diff_df: DataFrame = comparison_func(src_filtered, tgt_filtered)
+    diff_df: DataFrame = comparison_func(src_df, tgt_df)
     diff_count: int = diff_df.count()
     
     if diff_count == 0:
@@ -151,9 +153,9 @@ def validate_rows(src_df: DataFrame, tgt_df: DataFrame, exclude: list[str], mode
     # Try unicode downgrade if enabled
     if downgrade_unicode_enabled:
         print(f"Found {diff_count} mismatches, retrying with unicode downgraded...")
-        src_filtered = downgrade_unicode(src_filtered, replace_special_char, extra_replace_regex).persist(StorageLevel.MEMORY_AND_DISK)
-        tgt_filtered = downgrade_unicode(tgt_filtered, replace_special_char, extra_replace_regex).persist(StorageLevel.MEMORY_AND_DISK)
-        diff_df = comparison_func(src_filtered, tgt_filtered).persist(StorageLevel.MEMORY_AND_DISK)
+        src_df = downgrade_unicode(src_df, replace_special_char, extra_replace_regex).persist(StorageLevel.MEMORY_AND_DISK)
+        tgt_df = downgrade_unicode(tgt_df, replace_special_char, extra_replace_regex).persist(StorageLevel.MEMORY_AND_DISK)
+        diff_df = comparison_func(src_df, tgt_df).persist(StorageLevel.MEMORY_AND_DISK)
         diff_count = diff_df.count()
         
         if diff_count == 0:
@@ -163,16 +165,14 @@ def validate_rows(src_df: DataFrame, tgt_df: DataFrame, exclude: list[str], mode
     sample_df: DataFrame = diff_df.limit(10)
     
     sample_dicts: list[dict] = [row.asDict() for row in sample_df.collect()]
-
-    if mode == "except_all":
-        print("\n\n".join(str(row) for row in sample_dicts))
     
     return {
         "rows_different": diff_count,
         "sample_differences": sample_dicts,
-        "src_df": src_filtered,
-        "tgt_df": tgt_filtered,
-        "sample_df": sample_df
+        "src_df": src_df,
+        "tgt_df": tgt_df,
+        "sample_df": sample_df,
+        "diff_df": diff_df
     }
 
 # COMMAND ----------
@@ -239,8 +239,8 @@ try:
     if tgt_conn["system"]["max_rows"]:
         print(f"Ignoring target system max row limit of '{tgt_conn['system']['max_rows']}', can only be applied to source system...")
     
-    src_df = src_df.persist(StorageLevel.MEMORY_AND_DISK)
-    tgt_df = tgt_df.persist(StorageLevel.MEMORY_AND_DISK)
+    src_df = exclude_cols(src_df, exclude_columns).persist(StorageLevel.MEMORY_AND_DISK)
+    tgt_df = exclude_cols(tgt_df, exclude_columns).persist(StorageLevel.MEMORY_AND_DISK)
 
     # Step 6: Row-level validation (only if counts match)
     if count_result["row_count_match"]:
@@ -256,12 +256,12 @@ try:
                 raise ValueError(f"PK not unique: {duplicate_pk[0].asDict()}")
         
         print(f"Validating rows using {compare_mode}...")
-        row_result: dict = validate_rows(src_df, tgt_df, exclude_columns, compare_mode)
+        row_result: dict = validate_rows(src_df, tgt_df, compare_mode)
         result.update(row_result)
         result["rows_matched"] = max(result["rows_compared"] - result["rows_different"], 0)
     else:
         # if the row count match failed, we need to keep the dataframes for post analysis
-        result.update({"rows_compared": None, "rows_matched": None, "rows_different": None, "src_df": src_df, "tgt_df": tgt_df, "sample_df": None})
+        result.update({"rows_compared": None, "rows_matched": None, "rows_different": None, "src_df": src_df, "tgt_df": tgt_df, "sample_df": None, "diff_df": None})
 
     # Step 7: Determine final status
     if result["rows_different"] == 0:
@@ -302,18 +302,34 @@ if serde_result.get('src_df'):
     src_df = serde_result.pop('src_df')
     tgt_df = serde_result.pop('tgt_df')
     sample_df = serde_result.pop('sample_df')
+    diff_df = serde_result.pop('diff_df')
 
 history_response: dict = client.api_call("POST", "/api/validation-history", serde_result)
 
 if result["status"] == "succeeded":
+    src_df.unpersist(), tgt_df.unpersist()
     dbutils.notebook.exit("Validation passed")
 
 history_id: int | None = history_response.get("id") if history_response else None
+if not history_id:
+    src_df.unpersist(), tgt_df.unpersist()
+    dbutils.notebook.exit("Finished")
+
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## Except All Post Analysis
 
 # COMMAND ----------
 
-if compare_mode != "primary_key" or not history_id:
-    dbutils.notebook.exit("Finished")
+# Handle row count mismatch for except_all mode
+if compare_mode == "except_all" and not result["row_count_match"] and history_id:
+    print("Running except_all count analysis...")
+    except_all_count_analysis = run_except_all_count_analysis(result)
+    if except_all_count_analysis:
+        # Overwrite sample_differences with the full analysis (contains samples + column analysis)
+        client.api_call("PATCH", f"/api/validation-history/{history_id}", {"sample_differences": except_all_count_analysis})
+        print(f"Updated validation history {history_id} with except_all count analysis")
+    dbutils.notebook.exit("Validation failed - Row count mismatch")
 
 # COMMAND ----------
 # MAGIC %md
