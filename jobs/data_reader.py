@@ -156,6 +156,7 @@ def read_data(
         table = f"`{conn['catalog']}`.{table}"
         # invalidate the disk cache, may fix some of the caching issues we see
         spark.sql(f"REFRESH TABLE {table}")
+        spark.sql(f"UNCACHE TABLE {table}")
 
     watermark_clause: str = f" WHERE {watermark_expr}" if watermark_expr else ""
     read_query: str = generate_read_query(conn, table, type_mapping_func) if type_mapping_func and type_mapping_func.strip() else f"SELECT * FROM {table}"
