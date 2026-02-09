@@ -110,6 +110,10 @@ GRANT USAGE, SELECT ON SEQUENCES TO apprunner;`}
             <p className="text-gray-300 text-sm ml-9">
               Go to the <strong>Systems</strong> tab and add your source and target database systems (e.g., Databricks catalogs, Netezza, Teradata, etc.).
             </p>
+            <div className="mt-3 ml-9 px-3 py-2 bg-amber-950/40 border-l-2 border-amber-500 rounded-r text-xs text-amber-100/90">
+              <span className="font-semibold text-amber-300">JDBC Sources:</span> Ensure the correct driver JARs are added as job dependencies in <code className="text-amber-200">databricks.yml</code> under <code className="text-amber-200">run_validation</code> and{' '}
+              <a href="https://docs.databricks.com/aws/en/data-governance/unity-catalog/manage-privileges/allowlist#add-a-jar-to-the-allowlist" target="_blank" rel="noopener noreferrer" className="text-amber-300 hover:text-amber-200 underline">added to the UC Allowlist</a>.
+            </div>
           </div>
 
           {/* Step 5 */}

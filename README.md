@@ -105,6 +105,28 @@ Edit `databricks.yml` with your settings:
 
 > **Note:** `databricks.yml` is gitignored - your config stays local and won't conflict with updates.
 
+##### Optional for JDBC sources
+
+Edit job dependancies in `databricks.yml` with correct JARs for your project:
+```
+jobs:
+  run_validation:
+    tasks:
+      - task_key: validate
+        libraries:
+          # Both of these required for Teradata
+          - maven:
+              coordinates: com.teradata.jdbc:terajdbc:20.00.00.51
+          - pypi:
+              package: teradatasql
+          # Required for Oracle
+          - maven:
+              coordinates: com.oracle.database.jdbc:ojdbc11:23.5.0.24.07
+```
+> **Note:** These must be [added to the UC Allowlist](https://docs.databricks.com/aws/en/data-governance/unity-catalog/manage-privileges/allowlist#add-a-jar-to-the-allowlist)
+
+Remove anything you don't need. You can also come back to this step later after the app has been deployed and sources are being configured.
+
 ---
 
 #### Step 2: Deploy DAB
