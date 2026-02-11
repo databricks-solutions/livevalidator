@@ -234,7 +234,7 @@ export function TableModal({ table, systems, schedules, onSave, onClose }) {
           </div>
           <div className="mb-3">
             <label className="block mb-1 font-medium text-gray-400 text-sm">Primary Key Columns (comma-separated)</label>
-            <input value={Array.isArray(form.pk_columns)?form.pk_columns.join(','):''} onChange={e=>setForm({...form, pk_columns:e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})} className="w-full px-2 py-2 rounded-md border border-charcoal-200 bg-charcoal-400 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="id, user_id" />
+            <input value={Array.isArray(form.pk_columns)?form.pk_columns.join(', '):''} onChange={e=>setForm({...form, pk_columns:e.target.value.split(',').map(s=>s.trim())})} onBlur={e=>setForm(f=>({...f, pk_columns:(Array.isArray(f.pk_columns)?f.pk_columns:e.target.value.split(',').map(s=>s.trim())).filter(Boolean)}))} className="w-full px-2 py-2 rounded-md border border-charcoal-200 bg-charcoal-400 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="id, user_id" />
           </div>
           <div className="mb-3">
             <label className="block mb-1 font-medium text-gray-400 text-sm">Watermark Filter</label>

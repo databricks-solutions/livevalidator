@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: livevalidator
+Version: 0.0.1
+Summary: Coontrol-plane web app for LiveValidator
+Author-email: Dan Zafar <dan.zafar@nxp.com>
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi
+Requires-Dist: uvicorn[standard]
+Requires-Dist: asyncpg
+Requires-Dist: python-dotenv
+Requires-Dist: databricks-sdk

@@ -184,7 +184,7 @@ export function QueryModal({ query, systems, schedules, onSave, onClose }) {
             </div>
             <div className="mb-4">
               <label className="block mb-1.5 font-medium text-gray-300 text-sm">Primary Key Columns</label>
-              <input value={Array.isArray(form.pk_columns)?form.pk_columns.join(', '):''} onChange={e=>setForm({...form, pk_columns:e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})} placeholder="e.g., id, user_id" className="w-full px-3 py-2.5 rounded-md border border-charcoal-200 bg-charcoal-400 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
+              <input value={Array.isArray(form.pk_columns)?form.pk_columns.join(', '):''} onChange={e=>setForm({...form, pk_columns:e.target.value.split(',').map(s=>s.trim())})} onBlur={e=>setForm(f=>({...f, pk_columns:(Array.isArray(f.pk_columns)?f.pk_columns:e.target.value.split(',').map(s=>s.trim())).filter(Boolean)}))} placeholder="e.g., id, user_id" className="w-full px-3 py-2.5 rounded-md border border-charcoal-200 bg-charcoal-400 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
               <p className="text-gray-500 text-xs mt-1">Comma-separated list of columns that uniquely identify rows</p>
             </div>
             <div className="mb-4">

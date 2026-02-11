@@ -1,0 +1,6 @@
+pyproject.toml
+backend/livevalidator.egg-info/PKG-INFO
+backend/livevalidator.egg-info/SOURCES.txt
+backend/livevalidator.egg-info/dependency_links.txt
+backend/livevalidator.egg-info/requires.txt
+backend/livevalidator.egg-info/top_level.txt
