@@ -1,5 +1,0 @@
-fastapi
-uvicorn[standard]
-asyncpg
-python-dotenv
-databricks-sdk
