@@ -36,6 +36,13 @@ function ErrorPopover({ error, onClose }) {
   );
 }
 
+// Copy icon SVG component
+const CopyIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 16 16" aria-hidden="true">
+    <path fill="currentColor" fillRule="evenodd" d="M1.75 1a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75H5v3.25c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-8.5a.75.75 0 0 0-.75-.75H11V1.75a.75.75 0 0 0-.75-.75zM9.5 5V2.5h-7v7H5V5.75A.75.75 0 0 1 5.75 5zm-3 8.5v-7h7v7z" clipRule="evenodd"/>
+  </svg>
+);
+
 /**
  * Reusable validation results table component
  */
@@ -58,6 +65,30 @@ export function ValidationResultsTable({
   fillHeight = false,
 }) {
   const [errorModal, setErrorModal] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  // Copy table data to clipboard as TSV (paste into Excel/Sheets)
+  const handleCopyToClipboard = () => {
+    const headers = ['Entity', 'Type', 'Tags', 'Status', 'Duration (s)', 'Source', 'Target', 'Row Count Source', 'Row Count Target', 'Differences', 'Diff %', 'Triggered'];
+    const rows = data.map(v => [
+      v.entity_name,
+      v.entity_type === 'table' ? 'Table' : 'Query',
+      (v._parsedTags || v.tags || []).join(', '),
+      v.status,
+      v.duration_seconds ?? '',
+      v.source_system_name,
+      v.target_system_name,
+      v.row_count_source ?? '',
+      v.row_count_target ?? '',
+      v.rows_different ?? '',
+      v.difference_pct ?? '',
+      v.requested_at ? new Date(v.requested_at).toLocaleString() : ''
+    ].join('\t'));
+    const tsv = [headers.join('\t'), ...rows].join('\n');
+    navigator.clipboard.writeText(tsv);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const SortableHeader = ({ label, sortKey, className = "" }) => {
     if (!sortable) {
@@ -86,9 +117,19 @@ export function ValidationResultsTable({
 
   return (
     <div 
-      className={`overflow-x-auto overflow-y-auto ${fillHeight ? 'flex-1 min-h-0' : ''}`} 
+      className={`relative overflow-x-auto overflow-y-auto ${fillHeight ? 'flex-1 min-h-0' : ''}`} 
       style={maxHeight ? { maxHeight: `${maxHeight}px` } : undefined}
     >
+      {/* Floating copy button (hidden when empty) */}
+      {data.length > 0 && (
+        <button
+          onClick={handleCopyToClipboard}
+          className="absolute top-10 right-2 z-10 p-1.5 text-gray-400 hover:text-white bg-charcoal-400/90 hover:bg-charcoal-300 rounded shadow transition-colors"
+          title="Copy"
+        >
+          {copied ? <span className="text-green-400 text-xs px-0.5">✓</span> : <CopyIcon />}
+        </button>
+      )}
       <table className="w-full min-w-[1200px]">
         <thead className="sticky top-0 bg-charcoal-400 border-b border-charcoal-200">
           <tr>
@@ -109,8 +150,8 @@ export function ValidationResultsTable({
             <SortableHeader label="Source → Target" sortKey="systems" />
             <SortableHeader label="Row Counts" sortKey="row_counts" className="whitespace-nowrap" />
             <SortableHeader label="Diffs" sortKey="differences" className="whitespace-nowrap" />
-            <SortableHeader label="Triggered" sortKey="requested_at" />
             <th className="text-left px-2 py-1.5 text-sm text-gray-300 font-semibold w-16">Details</th>
+            <SortableHeader label="Triggered" sortKey="requested_at" />
           </tr>
         </thead>
         <tbody>
@@ -226,9 +267,6 @@ export function ValidationResultsTable({
                     <span className="text-green-400">0</span>
                   )}
                 </td>
-                <td className="px-2 py-1.5 text-sm text-gray-400 whitespace-nowrap">
-                  {new Date(v.requested_at).toLocaleString()}
-                </td>
                 <td className="px-2 py-1.5 text-sm whitespace-nowrap">
                   {v.databricks_run_url && (
                     <a
@@ -240,6 +278,9 @@ export function ValidationResultsTable({
                       View
                     </a>
                   )}
+                </td>
+                <td className="px-2 py-1.5 text-sm text-gray-400 whitespace-nowrap">
+                  {new Date(v.requested_at).toLocaleString()}
                 </td>
               </tr>
             ))
