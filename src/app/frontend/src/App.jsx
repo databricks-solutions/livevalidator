@@ -515,7 +515,7 @@ export default function App() {
   return (
     <CurrentUserContext.Provider value={currentUser}>
       <div className="flex h-screen font-sans">
-        <Sidebar view={view} setView={setView} />
+        <Sidebar view={view} setView={setView} setupRequired={setupRequired} />
       <div className="ml-48 flex-1 p-10 overflow-y-auto">
         <h1 className="mt-0 text-3xl font-bold text-gray-100">LiveValidator Control Panel</h1>
 
