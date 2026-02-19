@@ -73,7 +73,34 @@ VALUES
 
 SELECT setval('control.compare_queries_id_seq', (SELECT MAX(id) FROM control.compare_queries));
 
--- 4) Tags
+-- 4) Schedules (3 schedules: 11pm, 2am, 4am UTC)
+INSERT INTO control.schedules (id, name, cron_expr, timezone, enabled, max_concurrency, backfill_policy, created_by, updated_by)
+VALUES 
+  (1, 'nightly-11pm', '0 23 * * *', 'UTC', TRUE, 4, 'none', 'system', 'system'),
+  (2, 'nightly-2am', '0 2 * * *', 'UTC', TRUE, 4, 'none', 'system', 'system'),
+  (3, 'nightly-4am', '0 4 * * *', 'UTC', TRUE, 4, 'none', 'system', 'system');
+
+SELECT setval('control.schedules_id_seq', (SELECT MAX(id) FROM control.schedules));
+
+-- 5) Schedule bindings (randomly distribute entities across schedules)
+-- Schedule 1 (11pm): tables 1,4,7,10,13,16 + queries 1,4
+-- Schedule 2 (2am): tables 2,5,8,11,14,17 + queries 2,5
+-- Schedule 3 (4am): tables 3,6,9,12,15,18 + queries 3,6
+INSERT INTO control.schedule_bindings (schedule_id, entity_type, entity_id)
+VALUES 
+  -- Schedule 1: 11pm
+  (1, 'table', 1), (1, 'table', 4), (1, 'table', 7), (1, 'table', 10), (1, 'table', 13), (1, 'table', 16),
+  (1, 'compare_query', 1), (1, 'compare_query', 4),
+  -- Schedule 2: 2am
+  (2, 'table', 2), (2, 'table', 5), (2, 'table', 8), (2, 'table', 11), (2, 'table', 14), (2, 'table', 17),
+  (2, 'compare_query', 2), (2, 'compare_query', 5),
+  -- Schedule 3: 4am
+  (3, 'table', 3), (3, 'table', 6), (3, 'table', 9), (3, 'table', 12), (3, 'table', 15), (3, 'table', 18),
+  (3, 'compare_query', 3), (3, 'compare_query', 6);
+
+SELECT setval('control.schedule_bindings_id_seq', (SELECT MAX(id) FROM control.schedule_bindings));
+
+-- 6) Tags
 -- Compare mode tags
 INSERT INTO control.tags (name) VALUES ('primary_key'), ('except_all');
 -- Domain tags (4 domains, mutually exclusive)
@@ -369,10 +396,18 @@ INSERT INTO control.validation_history (
 -- Error: 2 (entity 9, query 6)
 -- Total: 24 entities
 
+-- Update validation_history to link to schedules based on entity bindings
+UPDATE control.validation_history vh
+SET schedule_id = sb.schedule_id
+FROM control.schedule_bindings sb
+WHERE vh.entity_type = sb.entity_type AND vh.entity_id = sb.entity_id;
+
 SELECT 'Seed data loaded successfully!' as status;
 SELECT 'Systems: ' || COUNT(*) FROM control.systems;
 SELECT 'Datasets (tables): ' || COUNT(*) FROM control.datasets;
 SELECT 'Compare Queries: ' || COUNT(*) FROM control.compare_queries;
+SELECT 'Schedules: ' || COUNT(*) FROM control.schedules;
+SELECT 'Schedule Bindings: ' || COUNT(*) FROM control.schedule_bindings;
 SELECT 'Tags: ' || COUNT(*) FROM control.tags;
 SELECT 'Entity Tags: ' || COUNT(*) FROM control.entity_tags;
 SELECT 'Validation History: ' || COUNT(*) FROM control.validation_history;

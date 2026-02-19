@@ -54,13 +54,13 @@ export function QueriesView({
     setExpandedRowId(expandedRowId === rowId ? null : rowId);
   };
 
-  // Helper to safely parse tags (handle JSON strings from backend)
-  const parseTags = (tags) => {
-    if (!tags) return [];
-    if (Array.isArray(tags)) return tags;
-    if (typeof tags === 'string') {
+  // Helper to safely parse arrays (handle JSON strings from backend)
+  const parseArray = (arr) => {
+    if (!arr) return [];
+    if (Array.isArray(arr)) return arr;
+    if (typeof arr === 'string') {
       try {
-        const parsed = JSON.parse(tags);
+        const parsed = JSON.parse(arr);
         return Array.isArray(parsed) ? parsed : [];
       } catch {
         return [];
@@ -68,6 +68,7 @@ export function QueriesView({
     }
     return [];
   };
+  const parseTags = parseArray;
 
   // Get all unique tags from data
   const allTags = useMemo(() => {
@@ -456,7 +457,7 @@ export function QueriesView({
               </thead>
               <tbody>
               {filteredData.map(row => {
-                const scheduleNames = Array.isArray(row.schedules) ? row.schedules.join(', ') : '';
+                const scheduleNames = parseArray(row.schedules).join(', ');
                 const isExpanded = expandedRowId === row.id;
                 const isSelected = selectedIds.has(row.id);
                 

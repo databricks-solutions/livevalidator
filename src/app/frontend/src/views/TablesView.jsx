@@ -50,13 +50,13 @@ export function TablesView({
     }
   }, [highlightEntityId, onClearEntityHighlight]);
 
-  // Helper to safely parse tags (handle JSON strings from backend)
-  const parseTags = (tags) => {
-    if (!tags) return [];
-    if (Array.isArray(tags)) return tags;
-    if (typeof tags === 'string') {
+  // Helper to safely parse arrays (handle JSON strings from backend)
+  const parseArray = (arr) => {
+    if (!arr) return [];
+    if (Array.isArray(arr)) return arr;
+    if (typeof arr === 'string') {
       try {
-        const parsed = JSON.parse(tags);
+        const parsed = JSON.parse(arr);
         return Array.isArray(parsed) ? parsed : [];
       } catch {
         return [];
@@ -64,6 +64,7 @@ export function TablesView({
     }
     return [];
   };
+  const parseTags = parseArray;
 
   // Get all unique tags from data
   const allTags = useMemo(() => {
@@ -452,7 +453,7 @@ export function TablesView({
               </thead>
               <tbody>
               {filteredData.map(row => {
-                const scheduleNames = Array.isArray(row.schedules) ? row.schedules.join(', ') : '';
+                const scheduleNames = parseArray(row.schedules).join(', ');
                 const srcTable = `${row.src_schema}.${row.src_table}`;
                 const tgtTable = `${row.tgt_schema}.${row.tgt_table}`;
                 const tablesMatch = srcTable === tgtTable;
