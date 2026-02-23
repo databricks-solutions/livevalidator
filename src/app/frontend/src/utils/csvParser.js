@@ -17,6 +17,13 @@ export function parseCSV(file, type, schedules, onComplete, systems = []) {
   });
 }
 
+// Parse boolean from CSV - defaults to true, recognizes various false values
+const parseBool = (val) => {
+  if (!val) return true;
+  const v = String(val).toLowerCase().trim();
+  return !['false', 'f', '0', 'no', 'n'].includes(v);
+};
+
 /**
  * Validate CSV data based on type
  */
@@ -58,7 +65,7 @@ function validateCSVData(data, type, schedules, systems) {
           name: row.name || `${row.src_schema}.${row.src_table}`,
           tgt_schema: row.tgt_schema || row.src_schema,
           tgt_table: row.tgt_table || row.src_table,
-          is_active: row.is_active !== 'false' && row.is_active !== '0',
+          is_active: parseBool(row.is_active),
           pk_columns: row.pk_columns ? row.pk_columns.split(',').map(s => s.trim()) : null,
           include_columns: row.include_columns ? row.include_columns.split(',').map(s => s.trim()) : [],
           exclude_columns: row.exclude_columns ? row.exclude_columns.split(',').map(s => s.trim()) : [],
@@ -95,7 +102,7 @@ function validateCSVData(data, type, schedules, systems) {
         validRows.push({
           ...row,
           name: row.name || `Query ${rowNum}`,
-          is_active: row.is_active !== 'false' && row.is_active !== '0',
+          is_active: parseBool(row.is_active),
           pk_columns: row.pk_columns ? row.pk_columns.split(',').map(s => s.trim()) : null,
           include_columns: row.include_columns ? row.include_columns.split(',').map(s => s.trim()) : [],
           exclude_columns: row.exclude_columns ? row.exclude_columns.split(',').map(s => s.trim()) : [],
