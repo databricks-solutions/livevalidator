@@ -149,7 +149,7 @@ export default function App() {
   }, [view]);
   
   // Check if database needs initialization
-  const setupRequired = [tbl.error, qs.error, sc.error, sys.error].some(
+  const setupRequired = [tbl.error, qs.error, sc.error, sys.error, dashboards.error].some(
     err => err?.action === "setup_required"
   );
   
@@ -532,6 +532,7 @@ export default function App() {
           <DashboardDirectoryView
             dashboards={dashboards.data}
             loading={dashboards.loading}
+            error={dashboards.error}
             onSelect={(id) => setSelectedDashboardId(id)}
             onRefresh={dashboards.refresh}
           />

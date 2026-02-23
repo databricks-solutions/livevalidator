@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { useCurrentUser } from '../App';
-import { dashboardService } from '../services/api';
+import { dashboardService, apiCall } from '../services/api';
 
-export function DashboardDirectoryView({ dashboards, loading, onSelect, onRefresh }) {
+export function DashboardDirectoryView({ dashboards, loading, error, onSelect, onRefresh }) {
   const currentUser = useCurrentUser();
   const [createError, setCreateError] = useState(null);
   const [collapsedSections, setCollapsedSections] = useState({});
+  const [initLoading, setInitLoading] = useState(false);
 
   const toggleSection = (key) => {
     setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -98,11 +99,50 @@ export function DashboardDirectoryView({ dashboards, loading, onSelect, onRefres
     );
   };
 
+  const handleInitialize = async () => {
+    setInitLoading(true);
+    try {
+      await apiCall('POST', '/api/setup/initialize-database');
+      onRefresh();
+    } catch (err) {
+      alert(`Initialization failed: ${err.message}`);
+    } finally {
+      setInitLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-96">
         <div className="w-16 h-16 border-4 border-charcoal-300 border-t-rust-light rounded-full animate-spin" />
         <p className="text-gray-400 mt-6 text-lg">Loading dashboards...</p>
+      </div>
+    );
+  }
+
+  if (error?.action === 'setup_required') {
+    return (
+      <div>
+        <div className="mb-4">
+          <h2 className="text-3xl font-bold text-rust-light mb-1">Dashboards</h2>
+          <p className="text-gray-400 text-base">
+            Create, organize, and share dashboards across projects
+          </p>
+        </div>
+        <div className="my-4 p-5 bg-charcoal-500 border border-charcoal-200 rounded-lg">
+          <p className="text-gray-300 mb-4">
+            <span className="font-semibold text-yellow-400">[ NOTICE ]</span>{' '}
+            <span className="font-semibold text-gray-100">Database Update Required:</span>{' '}
+            In order to access the updated Dashboards tab, please click the button below to update the system tables. This will not affect your existing data.
+          </p>
+          <button
+            onClick={handleInitialize}
+            disabled={initLoading}
+            className="px-4 py-2 bg-purple-600 text-gray-100 font-semibold border-0 rounded-md cursor-pointer hover:bg-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {initLoading ? 'Initializing...' : 'Initialize Dashboard Tables'}
+          </button>
+        </div>
       </div>
     );
   }
