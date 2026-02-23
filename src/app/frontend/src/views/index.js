@@ -1,5 +1,6 @@
 export { ValidationResultsView } from './ValidationResultsView';
 export { DashboardView } from './DashboardView';
+export { DashboardDirectoryView } from './DashboardDirectoryView';
 export { TablesView } from './TablesView';
 export { QueriesView } from './QueriesView';
 export { QueueView } from './QueueView';

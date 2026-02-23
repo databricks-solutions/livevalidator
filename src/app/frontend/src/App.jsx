@@ -47,6 +47,7 @@ import {
 import {
   ValidationResultsView,
   DashboardView,
+  DashboardDirectoryView,
   TablesView,
   QueriesView,
   QueueView,
@@ -116,6 +117,7 @@ export default function App() {
   const [highlightId, setHighlightId] = useState(null); // For highlighting specific validation run
   const [highlightEntityId, setHighlightEntityId] = useState(null); // For highlighting specific entity in tables/queries
   const [currentUser, setCurrentUser] = useState(null); // { email, role }
+  const [selectedDashboardId, setSelectedDashboardId] = useState(null);
   
   // Fetch current user
   useEffect(() => {
@@ -132,6 +134,7 @@ export default function App() {
   const sys = useFetch(`/api/systems`, []);
   const triggers = useFetch(`/api/triggers`, []);
   const queueStats = useFetch(`/api/queue-status`, {});
+  const dashboards = useFetch(`/api/dashboards`, []);
   
   useEffect(() => {
     if (view === 'queue') {
@@ -452,7 +455,7 @@ export default function App() {
   return (
     <CurrentUserContext.Provider value={currentUser}>
       <div className="flex h-screen font-sans">
-        <Sidebar view={view} setView={setView} setupRequired={setupRequired} />
+        <Sidebar view={view} setView={(v) => { setView(v); if (v === 'dashboard') setSelectedDashboardId(null); }} setupRequired={setupRequired} />
       <div className="ml-48 flex-1 p-10 overflow-y-auto">
         <h1 className="mt-0 text-3xl font-bold text-gray-100">LiveValidator Control Panel</h1>
 
@@ -524,10 +527,20 @@ export default function App() {
           />
         )}
 
-        {/* Dashboard View (lazy loads its own data) */}
-        {view === 'dashboard' && (
-          <DashboardView 
+        {/* Dashboard View (two-level routing) */}
+        {view === 'dashboard' && !selectedDashboardId && (
+          <DashboardDirectoryView
+            dashboards={dashboards.data}
+            loading={dashboards.loading}
+            onSelect={(id) => setSelectedDashboardId(id)}
+            onRefresh={dashboards.refresh}
+          />
+        )}
+        {view === 'dashboard' && selectedDashboardId && (
+          <DashboardView
+            dashboardId={selectedDashboardId}
             onNavigateToEntity={navigateToEntity}
+            onBack={() => { setSelectedDashboardId(null); dashboards.refresh(); }}
           />
         )}
 

@@ -205,6 +205,23 @@ export const currentUserService = {
 };
 
 /**
+ * Dashboard operations
+ */
+export const dashboardService = {
+  list: () => apiCall("GET", "/api/dashboards"),
+  get: (id) => apiCall("GET", `/api/dashboards/${id}`),
+  create: (data) => apiCall("POST", "/api/dashboards", data),
+  update: (id, data) => apiCall("PUT", `/api/dashboards/${id}`, data),
+  delete: (id) => apiCall("DELETE", `/api/dashboards/${id}`),
+  clone: (id) => apiCall("POST", `/api/dashboards/${id}/clone`),
+  listProjects: () => fetch("/api/dashboards/projects").then(r => r.json()),
+  addChart: (id, data) => apiCall("POST", `/api/dashboards/${id}/charts`, data),
+  updateChart: (id, chartId, data) => apiCall("PUT", `/api/dashboards/${id}/charts/${chartId}`, data),
+  deleteChart: (id, chartId) => apiCall("DELETE", `/api/dashboards/${id}/charts/${chartId}`),
+  reorderCharts: (id, order) => apiCall("PUT", `/api/dashboards/${id}/charts/reorder`, order),
+};
+
+/**
  * Unified API object
  */
 export const API = {

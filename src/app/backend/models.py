@@ -250,3 +250,48 @@ class TypeTransformationUpdate(BaseModel):
 
 class ValidatePythonCode(BaseModel):
     code: str
+
+
+# ---------- Dashboards ----------
+class DashboardIn(BaseModel):
+    name: str
+    project: str = 'General'
+
+    @field_validator('name')
+    @classmethod
+    def not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError('name cannot be empty')
+        return v.strip()
+
+
+class DashboardUpdate(BaseModel):
+    name: Optional[str] = None
+    project: Optional[str] = None
+    time_range_preset: Optional[str] = None
+    time_range_from: Optional[str] = None
+    time_range_to: Optional[str] = None
+    version: int
+
+
+class ChartIn(BaseModel):
+    name: str
+    filters: dict = Field(default_factory=dict)
+    sort_order: int = 0
+
+    @field_validator('name')
+    @classmethod
+    def not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError('name cannot be empty')
+        return v.strip()
+
+
+class ChartUpdate(BaseModel):
+    name: Optional[str] = None
+    filters: Optional[dict] = None
+    sort_order: Optional[int] = None
+
+
+class ChartReorder(BaseModel):
+    chart_ids: list[int]

@@ -302,3 +302,35 @@ CREATE TABLE IF NOT EXISTS control.app_config (
 INSERT INTO control.app_config (key, value, description, updated_by) 
 VALUES ('default_user_role', 'CAN_MANAGE', 'Default role assigned to new users on first access', 'system')
 ON CONFLICT (key) DO NOTHING;
+
+-- 14) Dashboards (persistent, stateful dashboard configurations)
+CREATE TABLE IF NOT EXISTS control.dashboards (
+  id                BIGSERIAL PRIMARY KEY,
+  name              TEXT NOT NULL,
+  project           TEXT NOT NULL DEFAULT 'General',
+  time_range_preset TEXT NOT NULL DEFAULT '7d',
+  time_range_from   TIMESTAMPTZ,
+  time_range_to     TIMESTAMPTZ,
+  created_by        TEXT NOT NULL,
+  updated_by        TEXT NOT NULL,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  version           INTEGER NOT NULL DEFAULT 1,
+  UNIQUE (name, created_by)
+);
+
+CREATE INDEX IF NOT EXISTS dashboards_created_by_idx ON control.dashboards (created_by);
+CREATE INDEX IF NOT EXISTS dashboards_project_idx ON control.dashboards (project);
+
+-- 15) Dashboard charts (per-chart filter configurations within a dashboard)
+CREATE TABLE IF NOT EXISTS control.dashboard_charts (
+  id               BIGSERIAL PRIMARY KEY,
+  dashboard_id     BIGINT NOT NULL REFERENCES control.dashboards(id) ON DELETE CASCADE,
+  name             TEXT NOT NULL,
+  sort_order       INTEGER NOT NULL DEFAULT 0,
+  filters          JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS dashboard_charts_dashboard_idx ON control.dashboard_charts (dashboard_id);

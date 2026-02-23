@@ -19,7 +19,8 @@ from backend.models import (
     QueryIn, QueryUpdate, BulkQueryItem, BulkQueryRequest,
     ScheduleIn, ScheduleUpdate, BindingIn,
     TriggerIn, BulkRepairRequest, BulkTriggerRequest, SystemIn, SystemUpdate,
-    TypeTransformationIn, TypeTransformationUpdate, ValidatePythonCode
+    TypeTransformationIn, TypeTransformationUpdate, ValidatePythonCode,
+    DashboardIn, DashboardUpdate, ChartIn, ChartUpdate, ChartReorder
 )
 from backend.default_transformations import get_default_transformation
 
@@ -2987,6 +2988,250 @@ async def reset_database():
         return {"ok": True, "message": "Database reset successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database reset failed: {str(e)}")
+
+# ---------- Dashboards ----------
+
+@api.get("/dashboards")
+async def list_dashboards():
+    """
+    List dashboards visible to the current user.
+    Visibility: own dashboards (any project) + dashboards in non-General projects (published).
+    """
+    user_email = get_user_email()
+    rows = await fetch("""
+        SELECT d.*,
+            (SELECT COUNT(*) FROM control.dashboard_charts dc WHERE dc.dashboard_id = d.id) as chart_count
+        FROM control.dashboards d
+        WHERE d.created_by = $1 OR d.project != 'General'
+        ORDER BY d.project, d.updated_at DESC
+    """, user_email)
+    return [serialize_row(r) for r in rows]
+
+
+@api.get("/dashboards/projects")
+async def list_projects():
+    """Return distinct project names for autocomplete."""
+    rows = await fetch("""
+        SELECT DISTINCT project FROM control.dashboards
+        WHERE project != 'General'
+        ORDER BY project
+    """)
+    return [r['project'] for r in rows]
+
+
+@api.get("/dashboards/{id}")
+async def get_dashboard(id: int):
+    """Get a dashboard with its charts."""
+    user_email = get_user_email()
+    dashboard = await fetchrow("SELECT * FROM control.dashboards WHERE id=$1", id)
+    if not dashboard:
+        raise HTTPException(404, "Dashboard not found")
+
+    d = serialize_row(dashboard)
+    if d['project'] == 'General' and d['created_by'] != user_email:
+        raise HTTPException(403, "This dashboard is private")
+
+    charts = await fetch(
+        "SELECT * FROM control.dashboard_charts WHERE dashboard_id=$1 ORDER BY sort_order, id", id
+    )
+    d['charts'] = [serialize_row(c) for c in charts]
+    return d
+
+
+@api.post("/dashboards")
+async def create_dashboard(body: DashboardIn):
+    """Create a new dashboard with a default 'Overall' chart."""
+    user_email = get_user_email()
+    dashboard = await fetchrow("""
+        INSERT INTO control.dashboards (name, project, created_by, updated_by)
+        VALUES ($1, $2, $3, $3)
+        RETURNING *
+    """, body.name, body.project, user_email)
+
+    await execute("""
+        INSERT INTO control.dashboard_charts (dashboard_id, name, sort_order, filters)
+        VALUES ($1, 'Overall', 0, '{}'::jsonb)
+    """, dashboard['id'])
+
+    d = serialize_row(dashboard)
+    charts = await fetch(
+        "SELECT * FROM control.dashboard_charts WHERE dashboard_id=$1 ORDER BY sort_order, id",
+        dashboard['id']
+    )
+    d['charts'] = [serialize_row(c) for c in charts]
+    return d
+
+
+@api.put("/dashboards/{id}")
+async def update_dashboard(id: int, body: DashboardUpdate):
+    """Update dashboard metadata with optimistic locking."""
+    user_email = get_user_email()
+
+    existing = await fetchrow("SELECT * FROM control.dashboards WHERE id=$1", id)
+    if not existing:
+        raise HTTPException(404, "Dashboard not found")
+    if existing['created_by'] != user_email:
+        role = await fetchrow("SELECT role FROM control.user_roles WHERE user_email=$1", user_email)
+        if not role or role['role'] != 'CAN_MANAGE':
+            raise HTTPException(403, "Only the dashboard creator or CAN_MANAGE users can update this dashboard")
+
+    row = await fetchrow("""
+        UPDATE control.dashboards SET
+            name = COALESCE($2, name),
+            project = COALESCE($3, project),
+            time_range_preset = COALESCE($4, time_range_preset),
+            time_range_from = COALESCE($5::timestamptz, time_range_from),
+            time_range_to = COALESCE($6::timestamptz, time_range_to),
+            updated_by = $7,
+            updated_at = now(),
+            version = version + 1
+        WHERE id=$1 AND version=$8
+        RETURNING *
+    """, id, body.name, body.project, body.time_range_preset,
+        body.time_range_from, body.time_range_to, user_email, body.version)
+
+    if not row:
+        current = await fetchrow("SELECT * FROM control.dashboards WHERE id=$1", id)
+        raise HTTPException(status_code=409, detail={
+            "error": "version_conflict",
+            "current": serialize_row(current) if current else None
+        })
+    return serialize_row(row)
+
+
+@api.delete("/dashboards/{id}")
+async def delete_dashboard(id: int):
+    """Delete a dashboard. Only the creator or CAN_MANAGE users."""
+    user_email = get_user_email()
+    existing = await fetchrow("SELECT * FROM control.dashboards WHERE id=$1", id)
+    if not existing:
+        raise HTTPException(404, "Dashboard not found")
+    if existing['created_by'] != user_email:
+        role = await fetchrow("SELECT role FROM control.user_roles WHERE user_email=$1", user_email)
+        if not role or role['role'] != 'CAN_MANAGE':
+            raise HTTPException(403, "Only the dashboard creator or CAN_MANAGE users can delete this dashboard")
+    await execute("DELETE FROM control.dashboards WHERE id=$1", id)
+    return {"ok": True}
+
+
+@api.post("/dashboards/{id}/clone")
+async def clone_dashboard(id: int):
+    """Clone a dashboard and all its charts."""
+    user_email = get_user_email()
+    source = await fetchrow("SELECT * FROM control.dashboards WHERE id=$1", id)
+    if not source:
+        raise HTTPException(404, "Dashboard not found")
+
+    new_dash = await fetchrow("""
+        INSERT INTO control.dashboards (name, project, time_range_preset, time_range_from, time_range_to, created_by, updated_by)
+        VALUES ($1, 'General', $2, $3, $4, $5, $5)
+        RETURNING *
+    """, f"{source['name']} (Copy)", source['time_range_preset'],
+        source['time_range_from'], source['time_range_to'], user_email)
+
+    charts = await fetch(
+        "SELECT * FROM control.dashboard_charts WHERE dashboard_id=$1 ORDER BY sort_order, id", id
+    )
+    for chart in charts:
+        await execute("""
+            INSERT INTO control.dashboard_charts (dashboard_id, name, sort_order, filters)
+            VALUES ($1, $2, $3, $4)
+        """, new_dash['id'], chart['name'], chart['sort_order'], json.dumps(dict(chart['filters']) if chart['filters'] else {}))
+
+    d = serialize_row(new_dash)
+    new_charts = await fetch(
+        "SELECT * FROM control.dashboard_charts WHERE dashboard_id=$1 ORDER BY sort_order, id",
+        new_dash['id']
+    )
+    d['charts'] = [serialize_row(c) for c in new_charts]
+    return d
+
+
+# -- Dashboard Charts --
+
+@api.post("/dashboards/{id}/charts")
+async def add_chart(id: int, body: ChartIn):
+    """Add a chart to a dashboard."""
+    user_email = get_user_email()
+    dashboard = await fetchrow("SELECT created_by FROM control.dashboards WHERE id=$1", id)
+    if not dashboard:
+        raise HTTPException(404, "Dashboard not found")
+    if dashboard['created_by'] != user_email:
+        await require_role('CAN_MANAGE')
+
+    row = await fetchrow("""
+        INSERT INTO control.dashboard_charts (dashboard_id, name, sort_order, filters)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *
+    """, id, body.name, body.sort_order, json.dumps(body.filters))
+
+    await execute("UPDATE control.dashboards SET updated_at=now(), updated_by=$2 WHERE id=$1", id, user_email)
+    return serialize_row(row)
+
+
+@api.put("/dashboards/{id}/charts/{chart_id}")
+async def update_chart(id: int, chart_id: int, body: ChartUpdate):
+    """Update a chart's name, filters, or sort_order."""
+    user_email = get_user_email()
+    dashboard = await fetchrow("SELECT created_by FROM control.dashboards WHERE id=$1", id)
+    if not dashboard:
+        raise HTTPException(404, "Dashboard not found")
+    if dashboard['created_by'] != user_email:
+        await require_role('CAN_MANAGE')
+
+    chart = await fetchrow("SELECT * FROM control.dashboard_charts WHERE id=$1 AND dashboard_id=$2", chart_id, id)
+    if not chart:
+        raise HTTPException(404, "Chart not found")
+
+    filters_json = json.dumps(body.filters) if body.filters is not None else None
+    row = await fetchrow("""
+        UPDATE control.dashboard_charts SET
+            name = COALESCE($2, name),
+            filters = COALESCE($3::jsonb, filters),
+            sort_order = COALESCE($4, sort_order),
+            updated_at = now()
+        WHERE id=$1
+        RETURNING *
+    """, chart_id, body.name, filters_json, body.sort_order)
+
+    await execute("UPDATE control.dashboards SET updated_at=now(), updated_by=$2 WHERE id=$1", id, user_email)
+    return serialize_row(row)
+
+
+@api.delete("/dashboards/{id}/charts/{chart_id}")
+async def delete_chart(id: int, chart_id: int):
+    """Remove a chart from a dashboard."""
+    user_email = get_user_email()
+    dashboard = await fetchrow("SELECT created_by FROM control.dashboards WHERE id=$1", id)
+    if not dashboard:
+        raise HTTPException(404, "Dashboard not found")
+    if dashboard['created_by'] != user_email:
+        await require_role('CAN_MANAGE')
+
+    result = await execute("DELETE FROM control.dashboard_charts WHERE id=$1 AND dashboard_id=$2", chart_id, id)
+    await execute("UPDATE control.dashboards SET updated_at=now(), updated_by=$2 WHERE id=$1", id, user_email)
+    return {"ok": True}
+
+
+@api.put("/dashboards/{id}/charts/reorder")
+async def reorder_charts(id: int, body: ChartReorder):
+    """Bulk update chart sort_order based on provided order."""
+    user_email = get_user_email()
+    dashboard = await fetchrow("SELECT created_by FROM control.dashboards WHERE id=$1", id)
+    if not dashboard:
+        raise HTTPException(404, "Dashboard not found")
+    if dashboard['created_by'] != user_email:
+        await require_role('CAN_MANAGE')
+
+    for idx, chart_id in enumerate(body.chart_ids):
+        await execute("""
+            UPDATE control.dashboard_charts SET sort_order=$2, updated_at=now()
+            WHERE id=$1 AND dashboard_id=$3
+        """, chart_id, idx, id)
+
+    await execute("UPDATE control.dashboards SET updated_at=now(), updated_by=$2 WHERE id=$1", id, user_email)
+    return {"ok": True}
+
 
 # ---------- Wire API ----------
 app.include_router(api)
