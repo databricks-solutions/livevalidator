@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useCurrentUser } from '../App';
 import { Checkbox } from '../components/Checkbox';
 import { dashboardService, apiCall } from '../services/api';
@@ -12,6 +12,20 @@ export function DashboardDirectoryView({ dashboards, loading, error, onSelect, o
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [filterText, setFilterText] = useState('');
   const [filterProject, setFilterProject] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editingValue, setEditingValue] = useState('');
+  const [editingProject, setEditingProject] = useState(null);
+  const [editingProjectValue, setEditingProjectValue] = useState('');
+  const editRef = useRef(null);
+  const editProjectRef = useRef(null);
+
+  useEffect(() => {
+    if (editingId && editRef.current) { editRef.current.focus(); editRef.current.select(); }
+  }, [editingId]);
+
+  useEffect(() => {
+    if (editingProject && editProjectRef.current) { editProjectRef.current.focus(); editProjectRef.current.select(); }
+  }, [editingProject]);
 
   const toggleSection = (key) => {
     setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -109,6 +123,30 @@ export function DashboardDirectoryView({ dashboards, loading, error, onSelect, o
     }
   };
 
+  const commitRename = async (id) => {
+    const trimmed = editingValue.trim();
+    const dash = allDashboardItems.find(d => d.id === id);
+    if (trimmed && dash && trimmed !== dash.name) {
+      try {
+        await dashboardService.update(id, { name: trimmed, version: dash.version });
+        onRefresh();
+      } catch (err) { alert(`Rename failed: ${err.message}`); }
+    }
+    setEditingId(null);
+  };
+
+  const commitProjectRename = async (oldName) => {
+    const trimmed = editingProjectValue.trim();
+    if (trimmed && trimmed !== oldName) {
+      try {
+        const items = allDashboardItems.filter(d => d.project === oldName);
+        await Promise.all(items.map(d => dashboardService.update(d.id, { project: trimmed, version: d.version })));
+        onRefresh();
+      } catch (err) { alert(`Project rename failed: ${err.message}`); }
+    }
+    setEditingProject(null);
+  };
+
   const someSelected = selectedIds.size > 0;
 
   const DashboardTable = ({ items }) => {
@@ -153,7 +191,30 @@ export function DashboardDirectoryView({ dashboards, loading, error, onSelect, o
                       onChange={(e) => handleSelectRow(d.id, e.target.checked)}
                     />
                   </td>
-                  <td className="px-3 py-1.5 text-gray-200 font-medium text-sm truncate">{d.name}</td>
+                  <td className="px-3 py-1.5 text-gray-200 font-medium text-sm truncate" onClick={(e) => e.stopPropagation()}>
+                    {editingId === d.id ? (
+                      <input
+                        ref={editRef}
+                        type="text"
+                        value={editingValue}
+                        onChange={(e) => setEditingValue(e.target.value)}
+                        onBlur={() => commitRename(d.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commitRename(d.id);
+                          if (e.key === 'Escape') setEditingId(null);
+                        }}
+                        className="w-full px-1.5 py-0.5 bg-charcoal-700 border border-purple-500 rounded text-gray-200 text-sm focus:outline-none"
+                      />
+                    ) : (
+                      <span
+                        onDoubleClick={(e) => { e.stopPropagation(); setEditingId(d.id); setEditingValue(d.name); }}
+                        className="cursor-text"
+                        title="Double-click to rename"
+                      >
+                        {d.name}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-1.5 text-gray-400 text-sm">{d.chart_count ?? 0}</td>
                   <td className="px-3 py-1.5 text-gray-400 text-sm truncate">{d.created_by}</td>
                   <td className="px-3 py-1.5 text-gray-400 text-sm">{formatDate(d.updated_at)}</td>
@@ -166,19 +227,41 @@ export function DashboardDirectoryView({ dashboards, loading, error, onSelect, o
     );
   };
 
-  const SectionHeader = ({ title, count, sectionKey }) => {
+  const SectionHeader = ({ title, count, sectionKey, isProject }) => {
     const isCollapsed = collapsedSections[sectionKey];
     return (
-      <button
+      <div
         onClick={() => toggleSection(sectionKey)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 bg-charcoal-400 border-b border-charcoal-200 hover:bg-charcoal-350 transition-colors text-left"
+        className="w-full flex items-center gap-2 px-3 py-2.5 bg-charcoal-400 border-b border-charcoal-200 hover:bg-charcoal-350 transition-colors text-left cursor-pointer"
       >
         <span className={`text-gray-400 text-xs transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`}>
           ▶
         </span>
-        <span className="text-sm font-semibold text-gray-200">{title}</span>
+        {isProject && editingProject === title ? (
+          <input
+            ref={editProjectRef}
+            type="text"
+            value={editingProjectValue}
+            onChange={(e) => setEditingProjectValue(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            onBlur={() => commitProjectRename(title)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitProjectRename(title);
+              if (e.key === 'Escape') setEditingProject(null);
+            }}
+            className="px-1.5 py-0.5 bg-charcoal-700 border border-purple-500 rounded text-gray-200 text-sm font-semibold focus:outline-none w-48"
+          />
+        ) : (
+          <span
+            className="text-sm font-semibold text-gray-200"
+            onDoubleClick={isProject ? (e) => { e.stopPropagation(); setEditingProject(title); setEditingProjectValue(title); } : undefined}
+            title={isProject ? 'Double-click to rename project' : undefined}
+          >
+            {title}
+          </span>
+        )}
         <span className="text-xs text-gray-500 ml-1">({count})</span>
-      </button>
+      </div>
     );
   };
 
@@ -349,6 +432,7 @@ export function DashboardDirectoryView({ dashboards, loading, error, onSelect, o
               title={section.name}
               count={section.items.length}
               sectionKey={`project-${section.name}`}
+              isProject
             />
             {!collapsedSections[`project-${section.name}`] && (
               <DashboardTable items={section.items} />
