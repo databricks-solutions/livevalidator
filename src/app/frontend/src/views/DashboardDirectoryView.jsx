@@ -419,27 +419,14 @@ export function DashboardDirectoryView({ dashboards, loading, error, onSelect, o
         </div>
 
         {/* My Dashboards */}
-        <SectionHeader
-          title="My Dashboards"
-          count={grouped.myDashboards.length}
-          sectionKey="my"
-        />
-        {!collapsedSections['my'] && (
-          <DashboardTable items={grouped.myDashboards} />
-        )}
+        {SectionHeader({ title: 'My Dashboards', count: grouped.myDashboards.length, sectionKey: 'my' })}
+        {!collapsedSections['my'] && DashboardTable({ items: grouped.myDashboards })}
 
         {/* Project Sections */}
         {grouped.projectSections.map(section => (
           <React.Fragment key={section.name}>
-            <SectionHeader
-              title={section.name}
-              count={section.items.length}
-              sectionKey={`project-${section.name}`}
-              isProject
-            />
-            {!collapsedSections[`project-${section.name}`] && (
-              <DashboardTable items={section.items} />
-            )}
+            {SectionHeader({ title: section.name, count: section.items.length, sectionKey: `project-${section.name}`, isProject: true })}
+            {!collapsedSections[`project-${section.name}`] && DashboardTable({ items: section.items })}
           </React.Fragment>
         ))}
 
