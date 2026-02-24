@@ -59,71 +59,77 @@ export function TagOverflowModal({ allTags, tagStates, onTagClick, onClose }) {
   if (pos.x === null) return null;
 
   return (
-    <div
-      style={{ position: 'fixed', left: pos.x, top: pos.y, width: size.w, height: size.h, zIndex: 9999 }}
-      className="flex flex-col bg-charcoal-600 border border-charcoal-200 rounded-xl shadow-2xl overflow-hidden select-none"
-    >
-      {/* Title bar — drag handle */}
-      <div
-        onMouseDown={onDragStart}
-        className="flex items-center justify-between px-4 py-2.5 bg-charcoal-500 border-b border-charcoal-200 cursor-move shrink-0"
-      >
-        <h3 className="text-sm font-semibold text-gray-100">All Tags ({allTags.length})</h3>
-        <button
-          onClick={onClose}
-          className="w-6 h-6 flex items-center justify-center rounded hover:bg-charcoal-400 text-gray-400 hover:text-white transition-colors text-sm"
-        >
-          ✕
-        </button>
-      </div>
+    <div className="fixed inset-0" style={{ zIndex: 9998 }}>
+      {/* Transparent backdrop — blocks interaction with the page */}
+      <div className="absolute inset-0" onClick={onClose} />
 
-      {/* Search */}
-      <div className="px-3 py-2 border-b border-charcoal-300/50 shrink-0">
-        <input
-          type="text"
-          placeholder="Search tags..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full px-3 py-1.5 bg-charcoal-700 border border-charcoal-300 rounded text-gray-200 text-sm focus:outline-none focus:border-purple-500"
-          autoFocus
+      {/* Floating panel */}
+      <div
+        style={{ position: 'absolute', left: pos.x, top: pos.y, width: size.w, height: size.h }}
+        className="flex flex-col bg-charcoal-600 border border-charcoal-200 rounded-xl shadow-2xl overflow-hidden select-none"
+      >
+        {/* Title bar — drag handle */}
+        <div
+          onMouseDown={onDragStart}
+          className="flex items-center justify-between px-4 py-2.5 bg-charcoal-500 border-b border-charcoal-200 cursor-move shrink-0"
+        >
+          <h3 className="text-sm font-semibold text-gray-100">All Tags ({allTags.length})</h3>
+          <button
+            onClick={onClose}
+            className="w-6 h-6 flex items-center justify-center rounded hover:bg-charcoal-400 text-gray-400 hover:text-white transition-colors text-sm"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="px-3 py-2 border-b border-charcoal-300/50 shrink-0">
+          <input
+            type="text"
+            placeholder="Search tags..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full px-3 py-1.5 bg-charcoal-700 border border-charcoal-300 rounded text-gray-200 text-sm focus:outline-none focus:border-purple-500"
+            autoFocus
+          />
+        </div>
+
+        {/* Scrollable tag grid */}
+        <div className="flex-1 overflow-y-auto p-3 min-h-0">
+          <div className="flex flex-wrap gap-1.5">
+            {filtered.map(tag => {
+              const colors = getTagColors(tag);
+              const state = tagStates[tag] || 'none';
+              return (
+                <button
+                  key={tag}
+                  onClick={() => onTagClick(tag)}
+                  className={`px-2 py-0.5 text-xs rounded transition-all duration-150 font-medium border cursor-pointer ${
+                    state === 'full'
+                      ? `${colors.bg} ${colors.text} ${colors.border} shadow-sm hover:opacity-80`
+                      : state === 'partial'
+                      ? `${colors.text} ${colors.border} border-2 border-dashed shadow-sm hover:opacity-80`
+                      : 'bg-charcoal-700/50 text-gray-500 border-charcoal-500/50 hover:bg-charcoal-600/50'
+                  }`}
+                >
+                  {tag}
+                </button>
+              );
+            })}
+            {filtered.length === 0 && (
+              <p className="text-gray-500 text-sm italic">No tags match "{search}"</p>
+            )}
+          </div>
+        </div>
+
+        {/* Resize grip */}
+        <div
+          data-resize="true"
+          onMouseDown={onResizeStart}
+          className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize"
+          style={{ background: 'linear-gradient(135deg, transparent 50%, rgba(156,163,175,0.4) 50%)', borderBottomRightRadius: '0.75rem' }}
         />
       </div>
-
-      {/* Scrollable tag grid */}
-      <div className="flex-1 overflow-y-auto p-3 min-h-0">
-        <div className="flex flex-wrap gap-1.5">
-          {filtered.map(tag => {
-            const colors = getTagColors(tag);
-            const state = tagStates[tag] || 'none';
-            return (
-              <button
-                key={tag}
-                onClick={() => onTagClick(tag)}
-                className={`px-2 py-0.5 text-xs rounded transition-all duration-150 font-medium border cursor-pointer ${
-                  state === 'full'
-                    ? `${colors.bg} ${colors.text} ${colors.border} shadow-sm hover:opacity-80`
-                    : state === 'partial'
-                    ? `${colors.text} ${colors.border} border-2 border-dashed shadow-sm hover:opacity-80`
-                    : 'bg-charcoal-700/50 text-gray-500 border-charcoal-500/50 hover:bg-charcoal-600/50'
-                }`}
-              >
-                {tag}
-              </button>
-            );
-          })}
-          {filtered.length === 0 && (
-            <p className="text-gray-500 text-sm italic">No tags match "{search}"</p>
-          )}
-        </div>
-      </div>
-
-      {/* Resize grip */}
-      <div
-        data-resize="true"
-        onMouseDown={onResizeStart}
-        className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize"
-        style={{ background: 'linear-gradient(135deg, transparent 50%, rgba(156,163,175,0.4) 50%)', borderBottomRightRadius: '0.75rem' }}
-      />
     </div>
   );
 }
