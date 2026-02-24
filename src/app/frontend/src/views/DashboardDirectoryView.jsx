@@ -251,14 +251,17 @@ export function DashboardDirectoryView({ dashboards, loading, error, onSelect, o
             }}
             className="px-1.5 py-0.5 bg-charcoal-700 border border-purple-500 rounded text-gray-200 text-sm font-semibold focus:outline-none w-48"
           />
-        ) : (
+        ) : isProject ? (
           <span
-            className="text-sm font-semibold text-gray-200"
-            onDoubleClick={isProject ? (e) => { e.stopPropagation(); setEditingProject(title); setEditingProjectValue(title); } : undefined}
-            title={isProject ? 'Double-click to rename project' : undefined}
+            onClick={(e) => e.stopPropagation()}
+            onDoubleClick={() => { setEditingProject(title); setEditingProjectValue(title); }}
+            className="text-sm font-semibold text-gray-200 cursor-text"
+            title="Double-click to rename project"
           >
             {title}
           </span>
+        ) : (
+          <span className="text-sm font-semibold text-gray-200">{title}</span>
         )}
         <span className="text-xs text-gray-500 ml-1">({count})</span>
       </div>
