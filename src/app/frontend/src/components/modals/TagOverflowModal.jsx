@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { getTagColors } from '../DashboardTagPane';
 
 export function TagOverflowModal({ allTags, tagStates, onTagClick, onClose }) {
@@ -52,20 +53,29 @@ export function TagOverflowModal({ allTags, tagStates, onTagClick, onClose }) {
     };
   }, []);
 
+  useEffect(() => {
+    const onEsc = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [onClose]);
+
   const filtered = search
     ? allTags.filter(t => t.toLowerCase().includes(search.toLowerCase()))
     : allTags;
 
   if (pos.x === null) return null;
 
-  return (
-    <div className="fixed inset-0" style={{ zIndex: 9998 }}>
-      {/* Transparent backdrop — blocks interaction with the page */}
-      <div className="absolute inset-0" onClick={onClose} />
+  return createPortal(
+    <>
+      {/* Backdrop — closes on click, doesn't block scroll */}
+      <div
+        onClick={onClose}
+        style={{ position: 'fixed', inset: 0, zIndex: 99998, background: 'rgba(0,0,0,0.3)' }}
+      />
 
       {/* Floating panel */}
       <div
-        style={{ position: 'absolute', left: pos.x, top: pos.y, width: size.w, height: size.h }}
+        style={{ position: 'fixed', left: pos.x, top: pos.y, width: size.w, height: size.h, zIndex: 99999 }}
         className="flex flex-col bg-charcoal-600 border border-charcoal-200 rounded-xl shadow-2xl overflow-hidden select-none"
       >
         {/* Title bar — drag handle */}
@@ -130,6 +140,7 @@ export function TagOverflowModal({ allTags, tagStates, onTagClick, onClose }) {
           style={{ background: 'linear-gradient(135deg, transparent 50%, rgba(156,163,175,0.4) 50%)', borderBottomRightRadius: '0.75rem' }}
         />
       </div>
-    </div>
+    </>,
+    document.body
   );
 }
