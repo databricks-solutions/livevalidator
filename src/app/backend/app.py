@@ -1778,25 +1778,50 @@ def _transform_pk_samples_to_legacy(sample_differences: dict | str | None) -> di
 
 @api.get("/validation-history")
 async def list_validation_history(
+    # Pagination
+    limit: int = 100,
+    offset: int = 0,
+    # Filters
     entity_type: Optional[str] = None,
     entity_id: Optional[int] = None,
+    entity_name: Optional[str] = None,
     status: Optional[str] = None,
     schedule_id: Optional[int] = None,
-    days_back: int = 30,
-    limit: int = 100,
-    offset: int = 0
+    source_system: Optional[str] = None,
+    target_system: Optional[str] = None,
+    tags: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    days_back: int = 0,
+    # Sorting
+    sort_by: str = "requested_at",
+    sort_dir: str = "desc",
 ):
     """
-    Get validation history with filters.
-    Used by History UI view and entity detail pages.
+    Get validation history with server-side filters and pagination.
+    Returns { data: [...], total: N, limit: N, offset: N }
     """
+    from datetime import datetime
+    
     conditions = []
     params = []
     param_idx = 1
     
-    # Filter by time range
-    if days_back > 0:
+    # Date range filters (date_from/date_to take precedence over days_back)
+    if date_from:
+        conditions.append(f"vh.requested_at >= ${param_idx}")
+        # Parse ISO string to datetime
+        dt = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
+        params.append(dt)
+        param_idx += 1
+    elif days_back > 0:
         conditions.append(f"vh.requested_at >= NOW() - INTERVAL '{days_back} days'")
+    
+    if date_to:
+        conditions.append(f"vh.requested_at <= ${param_idx}")
+        dt = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
+        params.append(dt)
+        param_idx += 1
     
     if entity_type:
         conditions.append(f"vh.entity_type = ${param_idx}")
@@ -1806,6 +1831,11 @@ async def list_validation_history(
     if entity_id:
         conditions.append(f"vh.entity_id = ${param_idx}")
         params.append(entity_id)
+        param_idx += 1
+    
+    if entity_name:
+        conditions.append(f"vh.entity_name ILIKE ${param_idx}")
+        params.append(f"%{entity_name}%")
         param_idx += 1
     
     if status:
@@ -1818,10 +1848,74 @@ async def list_validation_history(
         params.append(schedule_id)
         param_idx += 1
     
+    if source_system:
+        conditions.append(f"vh.source_system_name = ${param_idx}")
+        params.append(source_system)
+        param_idx += 1
+    
+    if target_system:
+        conditions.append(f"vh.target_system_name = ${param_idx}")
+        params.append(target_system)
+        param_idx += 1
+    
+    # Tag filtering (AND logic - must have all specified tags)
+    tag_join = ""
+    if tags:
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+        if tag_list:
+            tag_join = """
+                JOIN (
+                    SELECT et.entity_type, et.entity_id
+                    FROM control.entity_tags et
+                    JOIN control.tags t ON et.tag_id = t.id
+                    WHERE t.name = ANY($%d)
+                    GROUP BY et.entity_type, et.entity_id
+                    HAVING COUNT(DISTINCT t.name) = $%d
+                ) tf ON (
+                    (vh.entity_type = 'table' AND tf.entity_type = 'table' AND tf.entity_id = vh.entity_id)
+                    OR (vh.entity_type = 'compare_query' AND tf.entity_type = 'query' AND tf.entity_id = vh.entity_id)
+                )
+            """ % (param_idx, param_idx + 1)
+            params.append(tag_list)
+            params.append(len(tag_list))
+            param_idx += 2
+    
     where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
     
-    # NOTE: sample_differences excluded to reduce payload size (~15MB -> ~1MB for 2500 rows).
-    # Frontend fetches full details via GET /validation-history/{id} when user clicks to view.
+    # Validate sort column to prevent SQL injection
+    valid_sort_cols = {
+        "requested_at": "vh.requested_at",
+        "entity_name": "vh.entity_name",
+        "entity_type": "vh.entity_type",
+        "status": "vh.status",
+        "duration": "vh.duration_seconds",
+        "systems": "vh.source_system_name",
+        "row_counts": "vh.row_count_source",
+        "differences": "vh.rows_different",
+    }
+    sort_col = valid_sort_cols.get(sort_by, "vh.requested_at")
+    sort_direction = "DESC" if sort_dir.lower() == "desc" else "ASC"
+    
+    # Count total and status breakdown for matching records
+    stats_row = await fetchrow(f"""
+        SELECT 
+            COUNT(*) as total,
+            COUNT(*) FILTER (WHERE vh.status = 'succeeded') as succeeded,
+            COUNT(*) FILTER (WHERE vh.status = 'failed') as failed,
+            COUNT(*) FILTER (WHERE vh.status = 'error') as errors
+        FROM control.validation_history vh
+        {tag_join}
+        {where_clause}
+    """, *params)
+    total = stats_row['total'] if stats_row else 0
+    stats = {
+        "total": total,
+        "succeeded": stats_row['succeeded'] if stats_row else 0,
+        "failed": stats_row['failed'] if stats_row else 0,
+        "errors": stats_row['errors'] if stats_row else 0,
+    }
+    
+    # Fetch paginated results
     rows = await fetch(f"""
         SELECT 
             vh.id, vh.trigger_id, vh.entity_type, vh.entity_id, vh.entity_name,
@@ -1834,8 +1928,9 @@ async def list_validation_history(
             vh.rows_compared, vh.rows_different, vh.difference_pct,
             vh.compare_mode, vh.error_message, vh.databricks_run_url
         FROM control.validation_history vh
+        {tag_join}
         {where_clause}
-        ORDER BY vh.finished_at DESC
+        ORDER BY {sort_col} {sort_direction}
         LIMIT ${param_idx} OFFSET ${param_idx + 1}
     """, *params, limit, offset)
     
@@ -1874,7 +1969,7 @@ async def list_validation_history(
             tag_key = ('table', r['entity_id']) if r['entity_type'] == 'table' else ('query', r['entity_id'])
             r['tags'] = tags_by_entity.get(tag_key, [])
     
-    return results
+    return {"data": results, "total": total, "limit": limit, "offset": offset, "stats": stats}
 
 @api.get("/validation-history/{id}")
 async def get_validation_detail(id: int):

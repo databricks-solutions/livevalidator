@@ -235,7 +235,7 @@ export function ValidationResultsTable({
                   </span>
                 </td>
                 <td className="px-2 py-1.5">
-                  <TagList tags={v._parsedTags || []} maxVisible={4} />
+                  <TagList tags={parseArray(v._parsedTags || v.tags)} maxVisible={4} />
                 </td>
                 <td className="px-2 py-1.5">
                   {v.status === 'succeeded' ? (

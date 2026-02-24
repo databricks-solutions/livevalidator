@@ -135,16 +135,16 @@ export default function App() {
   const triggers = useFetch(`/api/triggers`, []);
   const queueStats = useFetch(`/api/queue-status`, {});
   
-  // Auto-refresh for validation results (refresh on nav, then every 5s)
+  // Auto-refresh for dashboard view (validation results view handles its own refresh)
   useEffect(() => {
-    if (view === 'results' && !validations.error) {
-      if (prevView.current !== 'results') validations.refresh();
+    if (view === 'dashboard' && selectedDashboardId && !validations.error) {
+      if (prevView.current !== 'dashboard') validations.refresh();
       prevView.current = view;
-      const interval = setInterval(() => validations.refresh(), 5000);
+      const interval = setInterval(() => validations.refresh(), 30000);
       return () => clearInterval(interval);
     }
     prevView.current = view;
-  }, [view, validations.error]);
+  }, [view, selectedDashboardId, validations.error]);
   
   useEffect(() => {
     if (view === 'queue') {
@@ -528,16 +528,11 @@ export default function App() {
         {editingSystem && <SystemModal system={editingSystem} onSave={handleSystemSave} onClose={() => setEditingSystem(null)} />}
         {uploadCSVType && <UploadCSVModal type={uploadCSVType} systems={sys.data} schedules={sc.data} onClose={() => setUploadCSVType(null)} onUpload={refreshAll} />}
 
-        {/* Validation Results View */}
+        {/* Validation Results View (self-contained with server-side pagination) */}
         {view === 'results' && (
           <ValidationResultsView 
-            data={validations.data}
-            loading={validations.loading}
-            error={validations.error}
-            onClearError={validations.clearError}
             highlightId={highlightId}
             onClearHighlight={() => setHighlightId(null)}
-            onRefresh={validations.refresh}
             onNavigateToEntity={navigateToEntity}
           />
         )}

@@ -71,24 +71,30 @@
   animation: shimmer 2s infinite;
 }
 
-/* Custom scrollbar for drill-down table */
-.overflow-x-auto::-webkit-scrollbar {
+/* Dark mode scrollbars - global */
+*::-webkit-scrollbar {
   height: 8px;
   width: 8px;
 }
 
-.overflow-x-auto::-webkit-scrollbar-track {
+*::-webkit-scrollbar-track {
   background: #1a1a1a;
   border-radius: 4px;
 }
 
-.overflow-x-auto::-webkit-scrollbar-thumb {
+*::-webkit-scrollbar-thumb {
   background: #404040;
   border-radius: 4px;
 }
 
-.overflow-x-auto::-webkit-scrollbar-thumb:hover {
-  background: #505050;
+*::-webkit-scrollbar-thumb:hover {
+  background: #606060;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #404040 #1a1a1a;
 }
 
 /* Vertical text for add chart button */
