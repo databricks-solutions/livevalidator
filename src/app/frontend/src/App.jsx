@@ -107,7 +107,6 @@ const InlineEditCell = ({ value, onSave, onCancel, type = "text", options = [] }
 
 export default function App() {
   const [view, setView] = useState('results');
-  const prevView = useRef(view);
   const [conflict, setConflict] = useState(null);
   const [notification, setNotification] = useState(null); // { type: 'success' | 'error', message: string }
   const showNotification = (message, type = 'success', details = null) => {
@@ -126,25 +125,13 @@ export default function App() {
       .catch(err => console.error('Failed to fetch current user:', err));
   }, []);
   
-  // Data fetching (validation-history first as it's the default view)
-  const validations = useFetch(`/api/validation-history?days_back=7&limit=10000`, []);
+  // Data fetching
   const tbl = useFetch(`/api/tables`, []);
   const qs = useFetch(`/api/queries`, []);
   const sc = useFetch(`/api/schedules`, []);
   const sys = useFetch(`/api/systems`, []);
   const triggers = useFetch(`/api/triggers`, []);
   const queueStats = useFetch(`/api/queue-status`, {});
-  
-  // Auto-refresh for validation results (refresh on nav, then every 5s)
-  useEffect(() => {
-    if (view === 'results' && !validations.error) {
-      if (prevView.current !== 'results') validations.refresh();
-      prevView.current = view;
-      const interval = setInterval(() => validations.refresh(), 5000);
-      return () => clearInterval(interval);
-    }
-    prevView.current = view;
-  }, [view, validations.error]);
   
   useEffect(() => {
     if (view === 'queue') {
@@ -528,26 +515,18 @@ export default function App() {
         {editingSystem && <SystemModal system={editingSystem} onSave={handleSystemSave} onClose={() => setEditingSystem(null)} />}
         {uploadCSVType && <UploadCSVModal type={uploadCSVType} systems={sys.data} schedules={sc.data} onClose={() => setUploadCSVType(null)} onUpload={refreshAll} />}
 
-        {/* Validation Results View */}
+        {/* Validation Results View (self-contained with server-side pagination) */}
         {view === 'results' && (
           <ValidationResultsView 
-            data={validations.data}
-            loading={validations.loading}
-            error={validations.error}
-            onClearError={validations.clearError}
             highlightId={highlightId}
             onClearHighlight={() => setHighlightId(null)}
-            onRefresh={validations.refresh}
             onNavigateToEntity={navigateToEntity}
           />
         )}
 
-        {/* Dashboard View */}
+        {/* Dashboard View (lazy loads its own data) */}
         {view === 'dashboard' && (
           <DashboardView 
-            data={validations.data}
-            loading={validations.loading}
-            error={validations.error}
             onNavigateToEntity={navigateToEntity}
           />
         )}

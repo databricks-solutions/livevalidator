@@ -1,59 +1,228 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { ErrorBox } from '../components/ErrorBox';
 import { TagBadge } from '../components/TagBadge';
 import { SampleDifferencesModal } from '../components/modals/SampleDifferencesModal';
 import { ValidationResultsTable } from '../components/ValidationResultsTable';
 import { validationService } from '../services/api';
 
-export function ValidationResultsView({ data, loading, error, onClearError, highlightId, onClearHighlight, onRefresh, onNavigateToEntity }) {
-  const [sortConfig, setSortConfig] = useState({ key: 'requested_at', direction: 'desc' });
-  const [filters, setFilters] = useState({
-    entity_name: '',
-    entity_type: '',
-    status: '',
-    system_pair: '',
-  });
+// Debounce hook
+function useDebounce(value, delay) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debouncedValue;
+}
+
+export function ValidationResultsView({ highlightId, onClearHighlight, onNavigateToEntity }) {
+  // Pagination state
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(100);
+  
+  // Filter input states (immediate)
+  const [entityNameInput, setEntityNameInput] = useState('');
   const [filterTags, setFilterTags] = useState([]);
+  const [entityType, setEntityType] = useState('');
+  const [status, setStatus] = useState('');
+  const [sourceSystem, setSourceSystem] = useState('');
+  const [targetSystem, setTargetSystem] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [activePreset, setActivePreset] = useState('7d');
+  
+  // Sorting state
+  const [sortConfig, setSortConfig] = useState({ key: 'requested_at', direction: 'desc' });
+  
+  // Debounced filter values (for API calls)
+  const debouncedEntityName = useDebounce(entityNameInput, 300);
+  
+  // Tag input state
   const [tagInput, setTagInput] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [activePreset, setActivePreset] = useState('');
+  const tagInputRef = useRef(null);
+  const inputElementRef = useRef(null);
+  
+  // Data state
+  const [data, setData] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [stats, setStats] = useState({ total: 0, succeeded: 0, failed: 0, errors: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  // Selection state
   const [selectedIds, setSelectedIds] = useState([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Sample modal state
   const [selectedSample, setSelectedSample] = useState(null);
   const [loadingSampleId, setLoadingSampleId] = useState(null);
+  
+  // Highlight ref
   const highlightedRowRef = useRef(null);
-  const tagInputRef = useRef(null);
-  const inputElementRef = useRef(null);
+  
+  // Systems list for dropdowns (fetched once)
+  const [availableSystems, setAvailableSystems] = useState([]);
+  const [allTags, setAllTags] = useState([]);
 
-  // Helper to safely parse tags (handle JSON strings from backend)
-  const parseTags = (tags) => {
-    if (!tags) return [];
-    if (Array.isArray(tags)) return tags;
-    if (typeof tags === 'string') {
-      try {
-        const parsed = JSON.parse(tags);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch {
-        return [];
-      }
+  // Fetch systems list for filter dropdowns
+  useEffect(() => {
+    fetch('/api/systems')
+      .then(r => r.json())
+      .then(systems => setAvailableSystems(systems.map(s => s.name)))
+      .catch(() => {});
+    fetch('/api/tags')
+      .then(r => r.json())
+      .then(tags => setAllTags(tags.map(t => t.name)))
+      .catch(() => {});
+  }, []);
+
+  // Calculate date range based on preset
+  const getDateRange = useCallback(() => {
+    if (dateFrom || dateTo) {
+      return { from: dateFrom, to: dateTo };
     }
-    return [];
+    if (!activePreset) {
+      return { from: '', to: '' };
+    }
+    
+    const now = new Date();
+    let from = new Date();
+    
+    switch (activePreset) {
+      case '1h': from.setHours(now.getHours() - 1); break;
+      case '3h': from.setHours(now.getHours() - 3); break;
+      case '6h': from.setHours(now.getHours() - 6); break;
+      case '12h': from.setHours(now.getHours() - 12); break;
+      case '24h': from.setHours(now.getHours() - 24); break;
+      case '7d': from.setDate(now.getDate() - 7); break;
+      case '30d': from.setDate(now.getDate() - 30); break;
+      default: return { from: '', to: '' };
+    }
+    
+    return { from: from.toISOString(), to: now.toISOString() };
+  }, [activePreset, dateFrom, dateTo]);
+
+  // Build query string from filters
+  const queryString = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set('limit', pageSize);
+    params.set('offset', page * pageSize);
+    params.set('sort_by', sortConfig.key);
+    params.set('sort_dir', sortConfig.direction);
+    
+    if (debouncedEntityName) params.set('entity_name', debouncedEntityName);
+    if (entityType) params.set('entity_type', entityType);
+    if (status) params.set('status', status);
+    if (sourceSystem) params.set('source_system', sourceSystem);
+    if (targetSystem) params.set('target_system', targetSystem);
+    if (filterTags.length > 0) params.set('tags', filterTags.join(','));
+    
+    const { from, to } = getDateRange();
+    if (from) params.set('date_from', from);
+    if (to) params.set('date_to', to);
+    
+    return params.toString();
+  }, [page, pageSize, sortConfig, debouncedEntityName, entityType, status, sourceSystem, targetSystem, filterTags, getDateRange]);
+
+  // Fetch data when query changes
+  useEffect(() => {
+    let cancelled = false;
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/validation-history?${queryString}`);
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        const result = await res.json();
+        if (!cancelled) {
+          setData(result.data || []);
+          setTotalCount(result.total || 0);
+          setStats(result.stats || { total: 0, succeeded: 0, failed: 0, errors: 0 });
+          setError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError({ message: err.message });
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchData();
+    return () => { cancelled = true; };
+  }, [queryString]);
+
+  // Auto-refresh every 30s when on first page with no filters
+  useEffect(() => {
+    const isDefaultView = page === 0 && !debouncedEntityName && !entityType && !status && 
+                          !sourceSystem && !targetSystem && filterTags.length === 0;
+    if (!isDefaultView) return;
+    
+    const interval = setInterval(() => {
+      fetch(`/api/validation-history?${queryString}`)
+        .then(r => r.json())
+        .then(result => {
+          setData(result.data || []);
+          setTotalCount(result.total || 0);
+          setStats(result.stats || { total: 0, succeeded: 0, failed: 0, errors: 0 });
+        })
+        .catch(() => {});
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [queryString, page, debouncedEntityName, entityType, status, sourceSystem, targetSystem, filterTags]);
+
+  // Scroll to highlighted row
+  useEffect(() => {
+    if (highlightId && highlightedRowRef.current) {
+      highlightedRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const timer = setTimeout(() => onClearHighlight?.(), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightId, onClearHighlight]);
+
+  // Handlers
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+    setPage(0);
   };
 
-  // Fetch full validation details on click (sample_differences excluded from list endpoint
-  // to reduce payload from ~15MB to ~1MB - fetched on-demand here instead)
+  const handlePresetClick = (preset) => {
+    setDateFrom('');
+    setDateTo('');
+    setActivePreset(preset);
+    setPage(0);
+  };
+
+  const handleDateFromChange = (value) => {
+    setDateFrom(value);
+    setActivePreset('');
+    setPage(0);
+  };
+
+  const handleDateToChange = (value) => {
+    setDateTo(value);
+    setActivePreset('');
+    setPage(0);
+  };
+
+  const clearDateFilters = () => {
+    setDateFrom('');
+    setDateTo('');
+    setActivePreset('');
+    setPage(0);
+  };
+
   const handleViewSample = async (validation) => {
     setLoadingSampleId(validation.id);
     try {
       const res = await fetch(`/api/validation-history/${validation.id}`);
-      if (res.ok) {
-        const detail = await res.json();
-        setSelectedSample(detail);
-      }
+      if (res.ok) setSelectedSample(await res.json());
     } catch (e) {
       console.error('Failed to fetch validation details:', e);
     } finally {
@@ -61,153 +230,11 @@ export function ValidationResultsView({ data, loading, error, onClearError, high
     }
   };
 
-  // Scroll to and highlight the row when highlightId changes
-  useEffect(() => {
-    if (highlightId && highlightedRowRef.current) {
-      highlightedRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      
-      // Clear highlight after 3 seconds
-      const timer = setTimeout(() => {
-        if (onClearHighlight) onClearHighlight();
-      }, 3000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [highlightId, onClearHighlight]);
-
-  const handleSort = (key) => {
-    setSortConfig(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
-    }));
-  };
-
-  const handleFilterChange = (key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-  };
-
-  const handlePresetClick = (preset) => {
-    const now = new Date();
-    let from = new Date();
-
-    switch (preset) {
-      case '1h':
-        from.setHours(now.getHours() - 1);
-        break;
-      case '3h':
-        from.setHours(now.getHours() - 3);
-        break;
-      case '6h':
-        from.setHours(now.getHours() - 6);
-        break;
-      case '12h':
-        from.setHours(now.getHours() - 12);
-        break;
-      case '24h':
-        from.setHours(now.getHours() - 24);
-        break;
-      case '7d':
-        from.setDate(now.getDate() - 7);
-        break;
-      default:
-        return;
-    }
-
-    // Format for datetime-local input
-    const formatDateTime = (date) => {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      return `${year}-${month}-${day}T${hours}:${minutes}`;
-    };
-
-    setDateFrom(formatDateTime(from));
-    setDateTo(formatDateTime(now));
-    setActivePreset(preset);
-  };
-
-  const handleDateFromChange = (value) => {
-    setDateFrom(value);
-    setActivePreset('');
-  };
-
-  const handleDateToChange = (value) => {
-    setDateTo(value);
-    setActivePreset('');
-  };
-
-  const clearDateFilters = () => {
-    setDateFrom('');
-    setDateTo('');
-    setActivePreset('');
-  };
-
-  const hasActiveFilters = filters.entity_name || filters.entity_type || filters.status || filters.system_pair || filterTags.length > 0 || dateFrom || dateTo;
-
-  const clearAllFilters = () => {
-    setFilters({
-      entity_name: '',
-      entity_type: '',
-      status: '',
-      system_pair: '',
-    });
-    setFilterTags([]);
-    clearDateFilters();
-  };
-
-  // Checkbox selection handlers
-  const toggleSelectAll = () => {
-    if (selectedIds.length === filteredAndSortedData.length) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(filteredAndSortedData.map(v => v.id));
-    }
-  };
-
-  const toggleSelectRow = (id) => {
-    setSelectedIds(prev => 
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
-  };
-
-  const handleDeleteSelected = async () => {
-    setIsDeleting(true);
-    try {
-      await validationService.deleteMultiple(selectedIds);
-      setSelectedIds([]);
-      setShowDeleteConfirm(false);
-      if (onRefresh) await onRefresh();
-    } catch (err) {
-      alert(`Failed to delete records: ${err.message}`);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  // Extract unique system pairs and tags from data
-  const availableSystemPairs = useMemo(() => {
-    const pairsSet = new Set();
-    data.forEach(v => {
-      if (v.source_system_name && v.target_system_name) {
-        pairsSet.add(`${v.source_system_name} → ${v.target_system_name}`);
-      }
-    });
-    return Array.from(pairsSet).sort();
-  }, [data]);
-
-  const allTags = useMemo(() => {
-    const tagSet = new Set();
-    data.forEach(row => {
-      parseTags(row.tags).forEach(tag => tagSet.add(tag));
-    });
-    return Array.from(tagSet).sort();
-  }, [data]);
-
+  // Tag handlers
   const addTagFilter = (tag) => {
     if (tag && !filterTags.includes(tag)) {
       setFilterTags(prev => [...prev, tag]);
+      setPage(0);
     }
     setTagInput('');
     setShowSuggestions(false);
@@ -216,9 +243,9 @@ export function ValidationResultsView({ data, loading, error, onClearError, high
 
   const removeTagFilter = (tag) => {
     setFilterTags(prev => prev.filter(t => t !== tag));
+    setPage(0);
   };
 
-  // Filter suggestions based on input
   const tagSuggestions = useMemo(() => {
     if (!tagInput.trim()) return [];
     const input = tagInput.toLowerCase();
@@ -227,7 +254,6 @@ export function ValidationResultsView({ data, loading, error, onClearError, high
       .slice(0, 10);
   }, [tagInput, allTags, filterTags]);
 
-  // Reset selected index when suggestions change
   useEffect(() => {
     setSelectedSuggestionIndex(0);
   }, [tagSuggestions]);
@@ -235,27 +261,21 @@ export function ValidationResultsView({ data, loading, error, onClearError, high
   const handleTagKeyDown = (e) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedSuggestionIndex(prev => 
-        Math.min(prev + 1, tagSuggestions.length - 1)
-      );
+      setSelectedSuggestionIndex(prev => Math.min(prev + 1, tagSuggestions.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setSelectedSuggestionIndex(prev => Math.max(prev - 1, 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (tagSuggestions.length > 0) {
-        addTagFilter(tagSuggestions[selectedSuggestionIndex]);
-      }
+      if (tagSuggestions.length > 0) addTagFilter(tagSuggestions[selectedSuggestionIndex]);
     } else if (e.key === 'Escape') {
       setShowSuggestions(false);
       setTagInput('');
     } else if (e.key === 'Backspace' && !tagInput && filterTags.length > 0) {
-      // Remove last tag when backspace is pressed on empty input
       removeTagFilter(filterTags[filterTags.length - 1]);
     }
   };
 
-  // Close suggestions when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (tagInputRef.current && !tagInputRef.current.contains(e.target)) {
@@ -266,117 +286,74 @@ export function ValidationResultsView({ data, loading, error, onClearError, high
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const filteredAndSortedData = useMemo(() => {
-    // Pre-parse tags and attach to avoid repeated JSON.parse
-    let result = data.map(v => ({
-      ...v,
-      _parsedTags: parseTags(v.tags),
-    }));
+  // Selection handlers
+  const toggleSelectAll = () => {
+    if (selectedIds.length === data.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(data.map(v => v.id));
+    }
+  };
 
-    // Apply date filters
-    if (dateFrom) {
-      const fromTime = new Date(dateFrom).getTime();
-      result = result.filter(v => new Date(v.requested_at).getTime() >= fromTime);
-    }
-    if (dateTo) {
-      const toTime = new Date(dateTo).getTime();
-      result = result.filter(v => new Date(v.requested_at).getTime() <= toTime);
-    }
+  const toggleSelectRow = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
 
-    // Apply filters
-    if (filters.entity_name) {
-      const searchTerm = filters.entity_name.toLowerCase();
-      result = result.filter(v => v.entity_name.toLowerCase().includes(searchTerm));
+  const handleDeleteSelected = async () => {
+    setIsDeleting(true);
+    try {
+      await validationService.deleteMultiple(selectedIds);
+      setSelectedIds([]);
+      setShowDeleteConfirm(false);
+      // Refresh data
+      const res = await fetch(`/api/validation-history?${queryString}`);
+      const result = await res.json();
+      setData(result.data || []);
+      setTotalCount(result.total || 0);
+    } catch (err) {
+      alert(`Failed to delete records: ${err.message}`);
+    } finally {
+      setIsDeleting(false);
     }
-    if (filters.entity_type) {
-      result = result.filter(v => v.entity_type === filters.entity_type);
-    }
-    if (filters.status) {
-      result = result.filter(v => v.status === filters.status);
-    }
-    if (filters.system_pair) {
-      result = result.filter(v => 
-        `${v.source_system_name} → ${v.target_system_name}` === filters.system_pair
-      );
-    }
-    
-    // Apply tag filter (AND logic - must have all selected tags)
-    if (filterTags.length > 0) {
-      result = result.filter(v => filterTags.every(filterTag => v._parsedTags.includes(filterTag)));
-    }
+  };
 
-    // Apply sorting
-    result.sort((a, b) => {
-      let aVal, bVal;
+  const hasActiveFilters = entityNameInput || entityType || status || sourceSystem || targetSystem || filterTags.length > 0 || dateFrom || dateTo;
 
-      switch (sortConfig.key) {
-        case 'entity_name':
-          aVal = a.entity_name.toLowerCase();
-          bVal = b.entity_name.toLowerCase();
-          break;
-        case 'entity_type':
-          aVal = a.entity_type;
-          bVal = b.entity_type;
-          break;
-        case 'status':
-          aVal = a.status;
-          bVal = b.status;
-          break;
-        case 'duration':
-          aVal = a.duration_seconds || 0;
-          bVal = b.duration_seconds || 0;
-          break;
-        case 'systems':
-          aVal = `${a.source_system_name} ${a.target_system_name}`.toLowerCase();
-          bVal = `${b.source_system_name} ${b.target_system_name}`.toLowerCase();
-          break;
-        case 'row_counts':
-          aVal = a.row_count_source || 0;
-          bVal = b.row_count_source || 0;
-          break;
-        case 'differences':
-          aVal = a.rows_different || 0;
-          bVal = b.rows_different || 0;
-          break;
-        case 'requested_at':
-          aVal = new Date(a.requested_at).getTime();
-          bVal = new Date(b.requested_at).getTime();
-          break;
-        default:
-          return 0;
-      }
+  const clearAllFilters = () => {
+    setEntityNameInput('');
+    setEntityType('');
+    setStatus('');
+    setSourceSystem('');
+    setTargetSystem('');
+    setFilterTags([]);
+    setDateFrom('');
+    setDateTo('');
+    setActivePreset('7d');
+    setPage(0);
+  };
 
-      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
+  // Summary stats from API (accurate totals for all filtered results)
+  const summaryStats = stats;
 
-    return result;
-  }, [data, filters, filterTags, sortConfig, dateFrom, dateTo]);
+  // Pagination calculations
+  const totalPages = Math.ceil(totalCount / pageSize);
+  const startRecord = page * pageSize + 1;
+  const endRecord = Math.min((page + 1) * pageSize, totalCount);
 
-  // Single-pass summary stats calculation
-  const summaryStats = useMemo(() => {
-    let succeeded = 0, failed = 0, errors = 0, totalDuration = 0;
-    for (const v of filteredAndSortedData) {
-      if (v.status === 'succeeded') succeeded++;
-      else if (v.status === 'failed') failed++;
-      else if (v.status === 'error') errors++;
-      totalDuration += v.duration_seconds || 0;
-    }
-    const avgDuration = filteredAndSortedData.length > 0 
-      ? (totalDuration / filteredAndSortedData.length / 60).toFixed(1) 
-      : '0';
-    return { succeeded, failed, errors, avgDuration, total: filteredAndSortedData.length };
-  }, [filteredAndSortedData]);
+  // Get current date range label
+  const getDateRangeLabel = () => {
+    if (dateFrom || dateTo) return 'Custom range';
+    if (activePreset === '7d') return 'last 7 days';
+    if (activePreset === '30d') return 'last 30 days';
+    if (activePreset) return `last ${activePreset}`;
+    return 'all time';
+  };
 
   return (
     <>
-      {error && error.action !== "setup_required" && <ErrorBox message={error.message} onClose={onClearError} />}
+      {error && <ErrorBox message={error.message} onClose={() => setError(null)} />}
       <div className="mb-4 flex items-start justify-between">
-        <div>
-          <h2 className="text-3xl font-bold text-rust-light mb-1">🎯 Validation Results</h2>
-          <p className="text-gray-400 text-base">Recent validation history for the last 7 days</p>
-        </div>
+        <h2 className="text-3xl font-bold text-rust-light">Validation Results</h2>
         {selectedIds.length > 0 && (
           <button
             onClick={() => setShowDeleteConfirm(true)}
@@ -388,101 +365,94 @@ export function ValidationResultsView({ data, loading, error, onClearError, high
       </div>
       
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
         <div className="bg-charcoal-500 border border-charcoal-200 rounded-lg p-2.5">
-          <div className="text-gray-400 text-sm mb-0.5">Total Validations</div>
-          <div className="text-3xl font-bold text-gray-100">{summaryStats.total}</div>
-          {summaryStats.total > 9500 && (
-            <div className="mt-2 px-2 py-1 bg-red-900/40 border border-red-700 rounded text-red-300 text-xs">
-              Results pane almost full ({summaryStats.total}/10000). Delete unneeded records
-            </div>
-          )}
+          <div className="flex items-center justify-between">
+            <span className="text-gray-400 text-sm">Total</span>
+            <span className="text-xs px-1.5 py-0.5 bg-charcoal-400 text-gray-300 rounded">{getDateRangeLabel()}</span>
+          </div>
+          <div className="text-3xl font-bold text-gray-100">{summaryStats.total.toLocaleString()}</div>
         </div>
         <div className="bg-green-900/20 border border-green-700 rounded-lg p-2.5">
           <div className="text-green-400 text-sm mb-0.5">✓ Succeeded</div>
-          <div className="text-3xl font-bold text-green-300">{summaryStats.succeeded}</div>
+          <div className="text-3xl font-bold text-green-300">{summaryStats.succeeded.toLocaleString()}</div>
         </div>
         <div className="bg-red-900/20 border border-red-700 rounded-lg p-2.5">
           <div className="text-red-400 text-sm mb-0.5">✗ Failed</div>
-          <div className="text-3xl font-bold text-red-300">{summaryStats.failed}</div>
+          <div className="text-3xl font-bold text-red-300">{summaryStats.failed.toLocaleString()}</div>
         </div>
         <div className="bg-orange-900/20 border border-orange-700 rounded-lg p-2.5">
           <div className="text-orange-400 text-sm mb-0.5">⚠ Errors</div>
-          <div className="text-3xl font-bold text-orange-300">{summaryStats.errors}</div>
-        </div>
-        <div className="bg-purple-900/20 border border-purple-700 rounded-lg p-2.5">
-          <div className="text-purple-400 text-sm mb-0.5">Avg Duration</div>
-          <div className="text-3xl font-bold text-purple-300">{summaryStats.avgDuration}m</div>
+          <div className="text-3xl font-bold text-orange-300">{summaryStats.errors.toLocaleString()}</div>
         </div>
       </div>
 
-      {loading ? <p className="text-gray-400">Loading…</p> : (
-        <div className="bg-charcoal-500 border border-charcoal-200 rounded-lg flex flex-col" style={{ minHeight: 'calc(100vh - 380px)' }}>
-          {/* Date Range Filter */}
-          <div className="p-2 bg-charcoal-400 border-b border-charcoal-200">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-gray-300 text-sm font-semibold">Time:</span>
-              {['1h', '3h', '6h', '12h', '24h', '7d'].map(preset => (
-                <button
-                  key={preset}
-                  onClick={() => handlePresetClick(preset)}
-                  className={`px-2 py-1 text-sm rounded transition-all ${
-                    activePreset === preset
-                      ? 'bg-rust-light text-white border border-rust-light shadow-sm'
-                      : 'bg-charcoal-600 text-gray-300 border border-charcoal-300 hover:border-rust-light/50 hover:bg-charcoal-500'
-                  }`}
-                >
-                  {preset}
-                </button>
-              ))}
-              {(dateFrom || dateTo) && (
-                <button
-                  onClick={clearDateFilters}
-                  className="px-2 py-1 text-sm rounded bg-red-900/40 text-red-300 border border-red-700 hover:bg-red-900/60 transition-all"
-                >
-                  Clear
-                </button>
-              )}
-              <div className="flex items-center gap-1 ml-auto">
-                <label className="text-gray-400 text-sm">From:</label>
-                <input
-                  type="datetime-local"
-                  value={dateFrom}
-                  onChange={(e) => handleDateFromChange(e.target.value)}
-                  className="px-2 py-1 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm focus:outline-none focus:border-rust-light"
-                />
-              </div>
-              <div className="flex items-center gap-1">
-                <label className="text-gray-400 text-sm">To:</label>
-                <input
-                  type="datetime-local"
-                  value={dateTo}
-                  onChange={(e) => handleDateToChange(e.target.value)}
-                  className="px-2 py-1 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm focus:outline-none focus:border-rust-light"
-                />
-              </div>
+      <div className="bg-charcoal-500 border border-charcoal-200 rounded-lg flex flex-col" style={{ minHeight: 'calc(100vh - 380px)' }}>
+        {/* Date Range Filter */}
+        <div className="p-2 bg-charcoal-400 border-b border-charcoal-200">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-gray-300 text-sm font-semibold">Time:</span>
+            {['1h', '3h', '6h', '12h', '24h', '7d', '30d'].map(preset => (
+              <button
+                key={preset}
+                onClick={() => handlePresetClick(preset)}
+                className={`px-2 py-1 text-sm rounded transition-all ${
+                  activePreset === preset && !dateFrom && !dateTo
+                    ? 'bg-rust-light text-white border border-rust-light shadow-sm'
+                    : 'bg-charcoal-600 text-gray-300 border border-charcoal-300 hover:border-rust-light/50 hover:bg-charcoal-500'
+                }`}
+              >
+                {preset}
+              </button>
+            ))}
+            {(dateFrom || dateTo || activePreset) && (
+              <button
+                onClick={clearDateFilters}
+                className="px-2 py-1 text-sm rounded bg-red-900/40 text-red-300 border border-red-700 hover:bg-red-900/60 transition-all"
+              >
+                Clear
+              </button>
+            )}
+            <div className="flex items-center gap-1 ml-auto">
+              <label className="text-gray-400 text-sm">From:</label>
+              <input
+                type="datetime-local"
+                value={dateFrom}
+                onChange={(e) => handleDateFromChange(e.target.value)}
+                className="px-2 py-1 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm focus:outline-none focus:border-rust-light"
+              />
+            </div>
+            <div className="flex items-center gap-1">
+              <label className="text-gray-400 text-sm">To:</label>
+              <input
+                type="datetime-local"
+                value={dateTo}
+                onChange={(e) => handleDateToChange(e.target.value)}
+                className="px-2 py-1 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm focus:outline-none focus:border-rust-light"
+              />
             </div>
           </div>
+        </div>
 
-          {/* Filters */}
-          <div className="p-2 bg-charcoal-400 border-b border-charcoal-200">
-            <div className="flex justify-between items-center mb-2 min-h-[24px]">
-              <span className="text-gray-300 text-sm font-semibold">Filters:</span>
-              {hasActiveFilters && (
-                <button
-                  onClick={clearAllFilters}
-                  className="px-2 py-0.5 text-xs rounded bg-red-900/40 text-red-300 border border-red-700 hover:bg-red-900/60 transition-all"
-                >
-                  Clear All
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+        {/* Filters */}
+        <div className="p-2 bg-charcoal-400 border-b border-charcoal-200">
+          <div className="flex justify-between items-center mb-2 min-h-[24px]">
+            <span className="text-gray-300 text-sm font-semibold">Filters:</span>
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                className="px-2 py-0.5 text-xs rounded bg-red-900/40 text-red-300 border border-red-700 hover:bg-red-900/60 transition-all"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
             <input
               type="text"
               placeholder="Filter by entity..."
-              value={filters.entity_name}
-              onChange={(e) => handleFilterChange('entity_name', e.target.value)}
+              value={entityNameInput}
+              onChange={(e) => { setEntityNameInput(e.target.value); setPage(0); }}
               className="px-2 py-1 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm focus:outline-none focus:border-rust-light"
             />
             
@@ -500,10 +470,7 @@ export function ValidationResultsView({ data, loading, error, onClearError, high
                   type="text"
                   placeholder={filterTags.length === 0 ? "Filter by tags..." : ""}
                   value={tagInput}
-                  onChange={(e) => {
-                    setTagInput(e.target.value);
-                    setShowSuggestions(true);
-                  }}
+                  onChange={(e) => { setTagInput(e.target.value); setShowSuggestions(true); }}
                   onKeyDown={handleTagKeyDown}
                   onFocus={() => setShowSuggestions(true)}
                   className="flex-1 min-w-[60px] bg-transparent border-0 text-gray-200 text-sm focus:outline-none placeholder-gray-500"
@@ -529,41 +496,53 @@ export function ValidationResultsView({ data, loading, error, onClearError, high
             </div>
 
             <select
-              value={filters.entity_type}
-              onChange={(e) => handleFilterChange('entity_type', e.target.value)}
+              value={entityType}
+              onChange={(e) => { setEntityType(e.target.value); setPage(0); }}
               className="px-2 py-1 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm focus:outline-none focus:border-rust-light hover:border-charcoal-100 transition-colors cursor-pointer"
             >
               <option value="">All Types</option>
               <option value="table">Table</option>
-              <option value="query">Query</option>
+              <option value="compare_query">Query</option>
             </select>
             <select
-              value={filters.status}
-              onChange={(e) => handleFilterChange('status', e.target.value)}
+              value={status}
+              onChange={(e) => { setStatus(e.target.value); setPage(0); }}
               className="px-2 py-1 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm focus:outline-none focus:border-rust-light hover:border-charcoal-100 transition-colors cursor-pointer"
             >
-              <option value="">All Statuses+</option>
+              <option value="">All Statuses</option>
               <option value="succeeded">Succeeded</option>
               <option value="failed">Failed</option>
               <option value="error">Error</option>
             </select>
             <select
-              value={filters.system_pair}
-              onChange={(e) => handleFilterChange('system_pair', e.target.value)}
+              value={sourceSystem}
+              onChange={(e) => { setSourceSystem(e.target.value); setPage(0); }}
               className="px-2 py-1 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm focus:outline-none focus:border-rust-light hover:border-charcoal-100 transition-colors cursor-pointer"
             >
-              <option value="">All System Pairs</option>
-              {availableSystemPairs.map(pair => (
-                <option key={pair} value={pair}>
-                  {pair}
-                </option>
+              <option value="">All Sources</option>
+              {availableSystems.map(sys => (
+                <option key={sys} value={sys}>{sys}</option>
               ))}
             </select>
-            </div>
+            <select
+              value={targetSystem}
+              onChange={(e) => { setTargetSystem(e.target.value); setPage(0); }}
+              className="px-2 py-1 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm focus:outline-none focus:border-rust-light hover:border-charcoal-100 transition-colors cursor-pointer"
+            >
+              <option value="">All Targets</option>
+              {availableSystems.map(sys => (
+                <option key={sys} value={sys}>{sys}</option>
+              ))}
+            </select>
           </div>
+        </div>
 
+        {/* Results Table */}
+        {loading && data.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center text-gray-400">Loading...</div>
+        ) : (
           <ValidationResultsTable
-            data={filteredAndSortedData}
+            data={data}
             onViewSample={handleViewSample}
             loadingSampleId={loadingSampleId}
             onEntityClick={onNavigateToEntity}
@@ -576,13 +555,70 @@ export function ValidationResultsView({ data, loading, error, onClearError, high
             sortable={true}
             sortConfig={sortConfig}
             onSort={handleSort}
-            emptyMessage={data.length === 0 
+            emptyMessage={totalCount === 0 
               ? "No validation history yet. Run a validation from Tables or Queries!" 
               : "No results match the current filters."}
             fillHeight={true}
           />
-        </div>
-      )}
+        )}
+
+        {/* Pagination Controls */}
+        {totalCount > 0 && (
+          <div className="flex items-center justify-between p-3 border-t border-charcoal-200 bg-charcoal-400">
+            <span className="text-gray-400 text-sm">
+              Showing {startRecord.toLocaleString()}-{endRecord.toLocaleString()} of {totalCount.toLocaleString()}
+            </span>
+            
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(0)}
+                disabled={page === 0}
+                className="px-2 py-1 text-sm rounded bg-charcoal-600 text-gray-300 border border-charcoal-300 hover:bg-charcoal-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                First
+              </button>
+              <button
+                onClick={() => setPage(p => p - 1)}
+                disabled={page === 0}
+                className="px-2 py-1 text-sm rounded bg-charcoal-600 text-gray-300 border border-charcoal-300 hover:bg-charcoal-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                Prev
+              </button>
+              
+              <span className="px-3 py-1 text-gray-300 text-sm">
+                Page {page + 1} of {totalPages}
+              </span>
+              
+              <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={page >= totalPages - 1}
+                className="px-2 py-1 text-sm rounded bg-charcoal-600 text-gray-300 border border-charcoal-300 hover:bg-charcoal-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                Next
+              </button>
+              <button
+                onClick={() => setPage(totalPages - 1)}
+                disabled={page >= totalPages - 1}
+                className="px-2 py-1 text-sm rounded bg-charcoal-600 text-gray-300 border border-charcoal-300 hover:bg-charcoal-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                Last
+              </button>
+            </div>
+
+            <select
+              value={pageSize}
+              onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
+              className="px-2 py-1 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm focus:outline-none focus:border-rust-light cursor-pointer"
+            >
+              <option value={50}>50 / page</option>
+              <option value={100}>100 / page</option>
+              <option value={250}>250 / page</option>
+              <option value={500}>500 / page</option>
+              <option value={1000}>1000 / page</option>
+            </select>
+          </div>
+        )}
+      </div>
 
       {/* Delete Confirmation Dialog */}
       {showDeleteConfirm && (

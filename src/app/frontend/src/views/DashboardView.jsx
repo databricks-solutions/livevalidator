@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Label } from 'recharts';
 import { SampleDifferencesModal } from '../components/modals/SampleDifferencesModal';
 import { ValidationResultsTable } from '../components/ValidationResultsTable';
@@ -112,7 +112,40 @@ const formatDateTime = (date) => {
   });
 };
 
-export function DashboardView({ data, loading, error, onNavigateToEntity }) {
+export function DashboardView({ onNavigateToEntity }) {
+  // Data fetching state (lazy loaded)
+  const [rawData, setRawData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  // Handle both array and { data: [...] } response formats
+  const data = Array.isArray(rawData) ? rawData : (rawData?.data || []);
+  
+  // Fetch data on mount and refresh periodically
+  useEffect(() => {
+    let cancelled = false;
+    const fetchData = async () => {
+      try {
+        const res = await fetch('/api/validation-history?days_back=7&limit=10000');
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        const result = await res.json();
+        if (!cancelled) {
+          setRawData(result.data || result || []);
+          setError(null);
+        }
+      } catch (err) {
+        if (!cancelled) setError({ message: err.message });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    
+    fetchData();
+    const interval = setInterval(fetchData, 30000);
+    
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+  
   // Filter states
   const [activePreset, setActivePreset] = useState('7d');
   const [customDateFrom, setCustomDateFrom] = useState('');
