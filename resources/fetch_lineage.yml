@@ -1,0 +1,32 @@
+resources:
+  jobs:
+    fetch_lineage:
+      name: "[LiveValidator] FetchLineage"
+      tasks:
+        - task_key: fetch_lineage
+          notebook_task:
+            notebook_path: ../jobs/fetch_lineage.py
+          environment_key: default
+          timeout_seconds: 300
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "1"
+      max_concurrent_runs: 10
+      parameters:
+        - name: table_name
+          default: ""
+        - name: catalog_name
+          default: ""
+        - name: backend_api_url
+          default: ""
+        - name: entity_type
+          default: ""
+        - name: entity_id
+          default: ""
+      permissions:
+        - level: CAN_MANAGE_RUN
+          group_name: users
+      tags:
+        application: live-validator
+        component: lineage

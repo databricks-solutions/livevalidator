@@ -7,6 +7,7 @@ export function Sidebar({ view, setView, setupRequired }) {
   const viewLabels = {
     'results': 'Results',
     'dashboard': 'Dashboard',
+    'analysis': 'Analysis',
     'tables': 'Tables',
     'queries': 'Queries',
     'queue': 'Queue',
@@ -18,7 +19,7 @@ export function Sidebar({ view, setView, setupRequired }) {
     'setup': 'Setup'
   };
 
-  const mainViews = ['results','dashboard','tables','queries','queue','configuration','type-mappings','schedules','systems'];
+  const mainViews = ['results','dashboard','analysis','tables','queries','queue','configuration','type-mappings','schedules','systems'];
   // Show Admin/Setup to CAN_MANAGE users, OR if DB setup is required
   const bottomViews = (currentUser?.role === 'CAN_MANAGE' || setupRequired) ? ['admin', 'setup'] : [];
 

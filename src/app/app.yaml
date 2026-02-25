@@ -7,6 +7,8 @@ command:
 env:
   - name: VALIDATION_JOB_ID
     valueFrom: 'run-validation'
+  - name: LINEAGE_JOB_ID
+    valueFrom: 'fetch-lineage'
 
 # Allow service principals and jobs to access the app
 permissions:
@@ -20,6 +22,12 @@ resources:
       id: ${resources.jobs.run_validation.id}
       permission: CAN_MANAGE_RUN
   
+  - name: fetch-lineage
+    description: "Job to fetch upstream lineage from Databricks"
+    job:
+      id: ${resources.jobs.fetch_lineage.id}
+      permission: CAN_MANAGE_RUN
+
   - name: job_sentinel
     description: "Orchestrator job that schedules and monitors validations"
     job:
