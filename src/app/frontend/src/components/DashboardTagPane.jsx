@@ -31,7 +31,6 @@ const MAX_VISIBLE_TAGS = 30;
 
 export function DashboardTagPane({
   allTags,
-  selectedTags,
   tagStates,
   onTagClick,
   onSelectAll,

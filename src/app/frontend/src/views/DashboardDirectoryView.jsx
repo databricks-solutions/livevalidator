@@ -1,7 +1,48 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useCurrentUser } from '../App';
 import { Checkbox } from '../components/Checkbox';
 import { dashboardService, apiCall } from '../services/api';
+
+const NameCell = ({ dashboard, isEditing, editingValue, editRef, onSelect, onStartEdit, onEditChange, onCommit, onCancel }) => {
+  const clickTimeout = useRef(null);
+  const handleClick = useCallback((e) => {
+    e.stopPropagation();
+    if (clickTimeout.current) {
+      clearTimeout(clickTimeout.current);
+      clickTimeout.current = null;
+      onStartEdit(dashboard.id, dashboard.name);
+    } else {
+      clickTimeout.current = setTimeout(() => {
+        clickTimeout.current = null;
+        onSelect(dashboard.id);
+      }, 250);
+    }
+  }, [dashboard.id, dashboard.name, onSelect, onStartEdit]);
+
+  if (isEditing) {
+    return (
+      <td className="px-3 py-1.5 text-gray-200 font-medium text-sm truncate" onClick={(e) => e.stopPropagation()}>
+        <input
+          ref={editRef}
+          type="text"
+          value={editingValue}
+          onChange={(e) => onEditChange(e.target.value)}
+          onBlur={onCommit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onCommit();
+            if (e.key === 'Escape') onCancel();
+          }}
+          className="w-full px-1.5 py-0.5 bg-charcoal-700 border border-purple-500 rounded text-gray-200 text-sm focus:outline-none"
+        />
+      </td>
+    );
+  }
+  return (
+    <td className="px-3 py-1.5 text-gray-200 font-medium text-sm truncate" onClick={handleClick} title="Click to open, double-click to rename">
+      {dashboard.name}
+    </td>
+  );
+};
 
 export function DashboardDirectoryView({ dashboards, loading, error, onSelect, onRefresh }) {
   const currentUser = useCurrentUser();
@@ -191,30 +232,17 @@ export function DashboardDirectoryView({ dashboards, loading, error, onSelect, o
                       onChange={(e) => handleSelectRow(d.id, e.target.checked)}
                     />
                   </td>
-                  <td className="px-3 py-1.5 text-gray-200 font-medium text-sm truncate" onClick={(e) => e.stopPropagation()}>
-                    {editingId === d.id ? (
-                      <input
-                        ref={editRef}
-                        type="text"
-                        value={editingValue}
-                        onChange={(e) => setEditingValue(e.target.value)}
-                        onBlur={() => commitRename(d.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') commitRename(d.id);
-                          if (e.key === 'Escape') setEditingId(null);
-                        }}
-                        className="w-full px-1.5 py-0.5 bg-charcoal-700 border border-purple-500 rounded text-gray-200 text-sm focus:outline-none"
-                      />
-                    ) : (
-                      <span
-                        onDoubleClick={(e) => { e.stopPropagation(); setEditingId(d.id); setEditingValue(d.name); }}
-                        className="cursor-text"
-                        title="Double-click to rename"
-                      >
-                        {d.name}
-                      </span>
-                    )}
-                  </td>
+                  <NameCell
+                    dashboard={d}
+                    isEditing={editingId === d.id}
+                    editingValue={editingValue}
+                    editRef={editRef}
+                    onSelect={onSelect}
+                    onStartEdit={(id, name) => { setEditingId(id); setEditingValue(name); }}
+                    onEditChange={setEditingValue}
+                    onCommit={() => commitRename(d.id)}
+                    onCancel={() => setEditingId(null)}
+                  />
                   <td className="px-3 py-1.5 text-gray-400 text-sm">{d.chart_count ?? 0}</td>
                   <td className="px-3 py-1.5 text-gray-400 text-sm truncate">{d.created_by}</td>
                   <td className="px-3 py-1.5 text-gray-400 text-sm">{formatDate(d.updated_at)}</td>

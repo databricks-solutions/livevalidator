@@ -6,6 +6,7 @@ import { DashboardDirectoryPane } from '../components/DashboardDirectoryPane';
 import { DashboardTagPane, getTagColors } from '../components/DashboardTagPane';
 import { DashboardPieChart, CATEGORIES, categorizeResult, computePieData } from '../components/DashboardPieChart';
 import { dashboardService } from '../services/api';
+import { useChartEntities, parseTags, getEntityKey } from '../hooks/useChartEntities';
 
 const TIME_PRESETS = [
   { label: '12h', hours: 12 },
@@ -16,25 +17,9 @@ const TIME_PRESETS = [
   { label: '7d', hours: 168 },
 ];
 
-const parseTags = (tags) => {
-  if (!tags) return [];
-  if (Array.isArray(tags)) return tags;
-  if (typeof tags === 'string') {
-    try {
-      const parsed = JSON.parse(tags);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-};
-
 const formatDate = (date) => {
   return new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 };
-
-const getEntityKey = (v) => `${v.entity_type}_${v.entity_id}`;
 
 export function DashboardView({ dashboardId, onNavigateToEntity, onBack }) {
   const [dashboard, setDashboard] = useState(null);
@@ -80,9 +65,8 @@ export function DashboardView({ dashboardId, onNavigateToEntity, onBack }) {
   const [drillDown, setDrillDown] = useState(null);
   const [selectedSample, setSelectedSample] = useState(null);
   const [loadingSampleId, setLoadingSampleId] = useState(null);
-
-  const [localChartFilters, setLocalChartFilters] = useState({});
   const [localChartNames, setLocalChartNames] = useState({});
+  const [loadedCharts, setLoadedCharts] = useState(null); // For initializing hook
 
   const loadDashboard = useCallback(async () => {
     setDashLoading(true);
@@ -100,18 +84,12 @@ export function DashboardView({ dashboardId, onNavigateToEntity, onBack }) {
       setCustomDateTo(dash.time_range_to || '');
       setProjects(projs);
 
-      const filters = {};
       const names = {};
       (dash.charts || []).forEach(c => {
-        let f = c.filters || {};
-        if (typeof f === 'string') {
-          try { f = JSON.parse(f); } catch { f = {}; }
-        }
-        filters[c.id] = f;
         names[c.id] = c.name;
       });
-      setLocalChartFilters(filters);
       setLocalChartNames(names);
+      setLoadedCharts(dash.charts); // Trigger hook initialization
       setHasUnsavedChanges(false);
     } catch (err) {
       setDashError(err.message);
@@ -123,45 +101,6 @@ export function DashboardView({ dashboardId, onNavigateToEntity, onBack }) {
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
-
-  const getChartFilters = (chartId) => localChartFilters[chartId] || {};
-
-  const updateChartFilter = (chartId, key, value) => {
-    setLocalChartFilters(prev => ({
-      ...prev,
-      [chartId]: { ...prev[chartId], [key]: value },
-    }));
-    setHasUnsavedChanges(true);
-  };
-
-  const handleSave = async () => {
-    try {
-      const updatedDash = await dashboardService.update(dashboardId, {
-        time_range_preset: activePreset,
-        time_range_from: activePreset === 'custom' ? customDateFrom || null : null,
-        time_range_to: activePreset === 'custom' ? customDateTo || null : null,
-        version: dashboard.version,
-      });
-      setDashboard(prev => ({ ...prev, version: updatedDash.version }));
-
-      for (const chart of charts) {
-        let filters = localChartFilters[chart.id] || {};
-        if (typeof filters === 'string') {
-          try { filters = JSON.parse(filters); } catch { filters = {}; }
-        }
-        const chartName = localChartNames[chart.id];
-        const payload = { filters };
-        if (chartName !== undefined && chartName !== chart.name) {
-          payload.name = chartName;
-        }
-        await dashboardService.updateChart(dashboardId, chart.id, payload);
-      }
-
-      await loadDashboard();
-    } catch (err) {
-      alert(`Save failed: ${err.message}`);
-    }
-  };
 
   const handleClone = async (name, project) => {
     try {
@@ -210,11 +149,11 @@ export function DashboardView({ dashboardId, onNavigateToEntity, onBack }) {
     try {
       const newChart = await dashboardService.addChart(dashboardId, {
         name: `Chart ${charts.length}`,
-        filters: { tags: ['__none__'] },
+        filters: { includedEntityKeys: [] },
         sort_order: charts.length,
       });
       setCharts(prev => [...prev, newChart]);
-      setLocalChartFilters(prev => ({ ...prev, [newChart.id]: { tags: ['__none__'] } }));
+      addChartEntityKeys(newChart.id);
       setLocalChartNames(prev => ({ ...prev, [newChart.id]: newChart.name }));
       setSelectedChartId(newChart.id);
       setDrillDown(null);
@@ -320,45 +259,29 @@ export function DashboardView({ dashboardId, onNavigateToEntity, onBack }) {
     return entityMap;
   }, [timeFilteredData]);
 
-  const applyChartFilters = useCallback((entities, filters) => {
-    let result = entities;
-    if (filters.tags && filters.tags.length > 0) {
-      const tagSet = new Set(filters.tags);
-      result = result.filter(v => parseTags(v.tags).some(t => tagSet.has(t)));
-    }
-    if (filters.entity_types && filters.entity_types.length > 0) {
-      result = result.filter(v => filters.entity_types.includes(v.entity_type));
-    }
-    if (filters.compare_modes && filters.compare_modes.length > 0) {
-      result = result.filter(v => filters.compare_modes.includes(v.compare_mode));
-    }
-    if (filters.system_pairs && filters.system_pairs.length > 0) {
-      result = result.filter(v => filters.system_pairs.includes(`${v.source_system_name} → ${v.target_system_name}`));
-    }
-    if (filters.schedules && filters.schedules.length > 0) {
-      result = result.filter(v => filters.schedules.includes(v.schedule_id));
-    }
-    return result;
-  }, []);
+  // Use the entity management hook
+  const {
+    getChartEntityKeys,
+    updateChartEntityKeys,
+    addChartEntityKeys,
+    getEntityKeysForSave,
+    getChartEntities,
+    selectedChart,
+    tagStates,
+    handleTagClick,
+    activateAllTags,
+    deactivateAllTags,
+  } = useChartEntities({
+    charts,
+    selectedChartId,
+    allEntityData,
+    allTagsInData,
+    loadedCharts,
+    onUnsavedChange: () => setHasUnsavedChanges(true),
+    setDrillDown,
+  });
 
-  const getChartEntities = useCallback((chartId) => {
-    const all = Array.from(allEntityData.values());
-    const filters = getChartFilters(chartId);
-    return applyChartFilters(all, filters);
-  }, [allEntityData, localChartFilters, applyChartFilters]);
-
-  const selectedChart = useMemo(() => {
-    return charts.find(c => c.id === selectedChartId) || charts[0];
-  }, [charts, selectedChartId]);
-
-  const latestPerEntity = useMemo(() => {
-    if (!selectedChart) return [];
-    return getChartEntities(selectedChart.id).map(v => ({
-      ...v,
-      _parsedTags: parseTags(v.tags),
-    }));
-  }, [selectedChart, getChartEntities]);
-
+  // Compute pie data for each chart
   const chartPieData = useMemo(() => {
     return charts.map(chart => {
       const entities = getChartEntities(chart.id);
@@ -386,30 +309,42 @@ export function DashboardView({ dashboardId, onNavigateToEntity, onBack }) {
     });
   }, [charts, getChartEntities, allEntityData]);
 
-  const selectedTagSet = useMemo(() => {
-    const filters = selectedChart ? getChartFilters(selectedChart.id) : {};
-    const tags = filters.tags || [];
-    if (tags.length === 0) return new Set(allTagsInData);
-    if (tags.length === 1 && tags[0] === '__none__') return new Set();
-    return new Set(tags);
-  }, [selectedChart, localChartFilters, allTagsInData]);
+  // Save handler (needs hook's getEntityKeysForSave)
+  const handleSave = async () => {
+    try {
+      const updatedDash = await dashboardService.update(dashboardId, {
+        time_range_preset: activePreset,
+        time_range_from: activePreset === 'custom' ? customDateFrom || null : null,
+        time_range_to: activePreset === 'custom' ? customDateTo || null : null,
+        version: dashboard.version,
+      });
+      setDashboard(prev => ({ ...prev, version: updatedDash.version }));
 
-  const tagStates = useMemo(() => {
-    const states = {};
-    const chartData = chartPieData.find(c => c.chartId === selectedChartId);
-    const fullSet = new Set(chartData?.fullTags || []);
-    const inChartSet = new Set(chartData?.tagsInChart || []);
-    allTagsInData.forEach(tag => {
-      if (selectedTagSet.has(tag)) {
-        if (fullSet.has(tag)) states[tag] = 'full';
-        else if (inChartSet.has(tag)) states[tag] = 'partial';
-        else states[tag] = 'none';
-      } else {
-        states[tag] = inChartSet.has(tag) ? 'partial' : 'none';
+      const entityKeysForSave = getEntityKeysForSave();
+      for (const chart of charts) {
+        const keys = entityKeysForSave[chart.id];
+        const filters = { includedEntityKeys: keys };
+        const chartName = localChartNames[chart.id];
+        const payload = { filters };
+        if (chartName !== undefined && chartName !== chart.name) {
+          payload.name = chartName;
+        }
+        await dashboardService.updateChart(dashboardId, chart.id, payload);
       }
-    });
-    return states;
-  }, [allTagsInData, chartPieData, selectedChartId, selectedTagSet]);
+
+      await loadDashboard();
+    } catch (err) {
+      alert(`Save failed: ${err.message}`);
+    }
+  };
+
+  const latestPerEntity = useMemo(() => {
+    if (!selectedChart) return [];
+    return getChartEntities(selectedChart.id).map(v => ({
+      ...v,
+      _parsedTags: parseTags(v.tags),
+    }));
+  }, [selectedChart, getChartEntities]);
 
   const trendData = useMemo(() => {
     const chartEntityKeys = new Set(latestPerEntity.map(getEntityKey));
@@ -441,48 +376,6 @@ export function DashboardView({ dashboardId, onNavigateToEntity, onBack }) {
     if (!drillDown) return [];
     return latestPerEntity.filter(v => categorizeResult(v) === drillDown.category);
   }, [drillDown, latestPerEntity]);
-
-  // ========== Tag click handlers ==========
-
-  const handleTagClick = (tag) => {
-    if (!selectedChart) return;
-    const filters = getChartFilters(selectedChart.id);
-    const currentTags = filters.tags || [];
-    const isSelected = selectedTagSet.has(tag);
-
-    if (isSelected) {
-      if (currentTags.length === 0) {
-        updateChartFilter(selectedChart.id, 'tags', allTagsInData.filter(t => t !== tag));
-      } else {
-        const remaining = currentTags.filter(t => t !== tag);
-        updateChartFilter(selectedChart.id, 'tags', remaining.length === 0 ? ['__none__'] : remaining);
-      }
-    } else {
-      if (currentTags.length === 1 && currentTags[0] === '__none__') {
-        updateChartFilter(selectedChart.id, 'tags', [tag]);
-      } else {
-        const newTags = [...currentTags, tag];
-        if (newTags.length === allTagsInData.length) {
-          updateChartFilter(selectedChart.id, 'tags', []);
-        } else {
-          updateChartFilter(selectedChart.id, 'tags', newTags);
-        }
-      }
-    }
-    setDrillDown(null);
-  };
-
-  const activateAllTags = () => {
-    if (!selectedChart) return;
-    updateChartFilter(selectedChart.id, 'tags', []);
-    setDrillDown(null);
-  };
-
-  const deactivateAllTags = () => {
-    if (!selectedChart) return;
-    updateChartFilter(selectedChart.id, 'tags', ['__none__']);
-    setDrillDown(null);
-  };
 
   const selectChart = (chartId) => {
     if (chartId !== selectedChartId) {
@@ -534,8 +427,6 @@ export function DashboardView({ dashboardId, onNavigateToEntity, onBack }) {
 
   if (!dashboard) return null;
 
-  const selectedChartFilters = selectedChart ? getChartFilters(selectedChart.id) : {};
-
   return (
     <div>
       <div className="mb-4">
@@ -559,7 +450,6 @@ export function DashboardView({ dashboardId, onNavigateToEntity, onBack }) {
         {/* Tag Pane (left) */}
         <DashboardTagPane
           allTags={allTagsInData}
-          selectedTags={selectedTagSet}
           tagStates={tagStates}
           onTagClick={handleTagClick}
           onSelectAll={activateAllTags}
@@ -618,69 +508,6 @@ export function DashboardView({ dashboardId, onNavigateToEntity, onBack }) {
             </div>
           </div>
 
-          {/* Per-chart filters (for selected chart) */}
-          {selectedChart && (
-            <div className="bg-gradient-to-br from-charcoal-500 to-charcoal-600 border border-charcoal-200 rounded-xl mb-4 shadow-lg p-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-gray-300 text-sm font-semibold">
-                  Filters for: <span className="text-purple-300">{selectedChart.name}</span>
-                </span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <div className="relative">
-                  <select
-                    value={selectedChartFilters.entity_types?.[0] || ''}
-                    onChange={(e) => updateChartFilter(selectedChart.id, 'entity_types', e.target.value ? [e.target.value] : [])}
-                    className="w-full px-3 py-2 bg-charcoal-700 border border-charcoal-300 rounded-lg text-gray-200 text-sm focus:outline-none focus:border-purple-500 appearance-none cursor-pointer"
-                  >
-                    <option value="">All Entity Types</option>
-                    <option value="table">Tables</option>
-                    <option value="compare_query">Queries</option>
-                  </select>
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">▾</div>
-                </div>
-                <div className="relative">
-                  <select
-                    value={selectedChartFilters.compare_modes?.[0] || ''}
-                    onChange={(e) => updateChartFilter(selectedChart.id, 'compare_modes', e.target.value ? [e.target.value] : [])}
-                    className="w-full px-3 py-2 bg-charcoal-700 border border-charcoal-300 rounded-lg text-gray-200 text-sm focus:outline-none focus:border-purple-500 appearance-none cursor-pointer"
-                  >
-                    <option value="">All Compare Modes</option>
-                    <option value="primary_key">Primary Key</option>
-                    <option value="except_all">Except All</option>
-                  </select>
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">▾</div>
-                </div>
-                <div className="relative">
-                  <select
-                    value={selectedChartFilters.system_pairs?.[0] || ''}
-                    onChange={(e) => updateChartFilter(selectedChart.id, 'system_pairs', e.target.value ? [e.target.value] : [])}
-                    className="w-full px-3 py-2 bg-charcoal-700 border border-charcoal-300 rounded-lg text-gray-200 text-sm focus:outline-none focus:border-purple-500 appearance-none cursor-pointer"
-                  >
-                    <option value="">All System Pairs</option>
-                    {filterOptions.systemPairs.map(pair => (
-                      <option key={pair} value={pair}>{pair}</option>
-                    ))}
-                  </select>
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">▾</div>
-                </div>
-                <div className="relative">
-                  <select
-                    value={selectedChartFilters.schedules?.[0] || ''}
-                    onChange={(e) => updateChartFilter(selectedChart.id, 'schedules', e.target.value ? [parseInt(e.target.value)] : [])}
-                    className="w-full px-3 py-2 bg-charcoal-700 border border-charcoal-300 rounded-lg text-gray-200 text-sm focus:outline-none focus:border-purple-500 appearance-none cursor-pointer"
-                  >
-                    <option value="">All Schedules</option>
-                    {filterOptions.schedules.map(id => (
-                      <option key={id} value={id}>Schedule #{id}</option>
-                    ))}
-                  </select>
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">▾</div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Pie Charts */}
           <div className="mb-4">
             <button
@@ -706,28 +533,18 @@ export function DashboardView({ dashboardId, onNavigateToEntity, onBack }) {
                 const isSelected = chartId === selectedChartId;
                 const customName = localChartNames[chartId];
                 const isDefaultName = /^Chart \d+$/.test(customName || '');
+                const isAllEntities = getChartEntityKeys(chartId) === null;
 
-                const chartFilters = localChartFilters[chartId] || {};
-                const filterTags = (chartFilters.tags || []).filter(t => t !== '__none__');
-                const isAllMode = filterTags.length === 0;
-                const filterSet = new Set(filterTags);
-
-                const visibleTags = tagsInChart;
-                const visibleFullTags = isAllMode ? fullTags : fullTags.filter(t => filterSet.has(t));
-                const visiblePartialTags = isAllMode
-                  ? partialTags
-                  : tagsInChart.filter(t => !visibleFullTags.includes(t));
-                const displayTags = isAllMode ? tagsInChart : filterTags;
-
+                // Entity-centric: title based on tags in chart
                 let chartTitle;
                 if (!isDefaultName && customName) {
                   chartTitle = customName;
-                } else if (displayTags.length === 0) {
+                } else if (isAllEntities || tagsInChart.length === 0) {
                   chartTitle = customName || chart?.name || 'All';
-                } else if (displayTags.length <= 4) {
-                  chartTitle = displayTags.join(', ');
+                } else if (fullTags.length <= 4) {
+                  chartTitle = fullTags.join(', ') || tagsInChart.slice(0, 4).join(', ');
                 } else {
-                  chartTitle = `${displayTags.slice(0, 4).join(', ')} +${displayTags.length - 4}`;
+                  chartTitle = `${fullTags.slice(0, 4).join(', ')} +${fullTags.length - 4}`;
                 }
 
                 return (
@@ -743,9 +560,9 @@ export function DashboardView({ dashboardId, onNavigateToEntity, onBack }) {
                     onSelect={selectChart}
                     onRemove={handleRemoveChart}
                     onRename={handleChartRename}
-                    chartTags={visibleTags}
-                    chartFullTags={visibleFullTags}
-                    chartPartialTags={visiblePartialTags}
+                    chartTags={tagsInChart}
+                    chartFullTags={fullTags}
+                    chartPartialTags={partialTags}
                     chartName={customName || chart?.name}
                   />
                 );
@@ -765,7 +582,7 @@ export function DashboardView({ dashboardId, onNavigateToEntity, onBack }) {
                     const fullSet = new Set(cd?.fullTags || []);
                     return tags.map(tag => {
                       const colors = getTagColors(tag);
-                      const isFull = fullSet.has(tag) && selectedTagSet.has(tag);
+                      const isFull = fullSet.has(tag);
                       return (
                         <span key={tag} className={`px-2 py-0.5 text-sm rounded ${
                           isFull
