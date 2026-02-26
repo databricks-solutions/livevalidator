@@ -48,6 +48,7 @@ import {
   ValidationResultsView,
   DashboardView,
   DashboardDirectoryView,
+  AnalysisView,
   TablesView,
   QueriesView,
   QueueView,
@@ -108,6 +109,8 @@ const InlineEditCell = ({ value, onSave, onCancel, type = "text", options = [] }
 
 export default function App() {
   const [view, setView] = useState('results');
+  const [viewResetKey, setViewResetKey] = useState(0);
+  const prevView = useRef(view);
   const [conflict, setConflict] = useState(null);
   const [notification, setNotification] = useState(null); // { type: 'success' | 'error', message: string }
   const showNotification = (message, type = 'success', details = null) => {
@@ -418,6 +421,24 @@ export default function App() {
     setView('results');
   };
 
+  // Configure a new table from lineage (pre-populate schema.table from lineage row)
+  const configureTableFromLineage = ({ schema_name, object_name, catalog_name }) => {
+    const srcTable = schema_name && object_name ? `${schema_name}.${object_name}` : object_name || '';
+    setEditingTable({
+      src_schema: schema_name || '',
+      src_table: object_name || '',
+      tgt_schema: schema_name || '',
+      tgt_table: object_name || '',
+      name: srcTable,
+      src_system_id: sys.data[0]?.id || 1,
+      tgt_system_id: sys.data[1]?.id || sys.data[0]?.id || 2,
+      compare_mode: 'except_all',
+      pk_columns: [],
+      watermark_filter: '',
+      exclude_columns: [],
+    });
+  };
+
   // Navigate to entity in tables or queries view
   const navigateToEntity = (entityType, entityId) => {
     setHighlightEntityId(entityId);
@@ -455,9 +476,12 @@ export default function App() {
   return (
     <CurrentUserContext.Provider value={currentUser}>
       <div className="flex h-screen font-sans">
-        <Sidebar view={view} setView={(v) => { setView(v); if (v === 'dashboard') setSelectedDashboardId(null); }} setupRequired={setupRequired} />
+        <Sidebar view={view} setView={(v) => { 
+          if (v === view) setViewResetKey(k => k + 1); 
+          setView(v); 
+          if (v === 'dashboard') setSelectedDashboardId(null); 
+        }} setupRequired={setupRequired} />
       <div className="ml-48 flex-1 p-10 overflow-y-auto">
-        <h1 className="mt-0 text-3xl font-bold text-gray-100">LiveValidator Control Panel</h1>
 
         {/* Database Setup Required Banner */}
         {setupRequired && (
@@ -542,6 +566,29 @@ export default function App() {
             dashboardId={selectedDashboardId}
             onNavigateToEntity={navigateToEntity}
             onBack={() => { setSelectedDashboardId(null); dashboards.refresh(); }}
+          />
+        )}
+
+        {/* Analysis View */}
+        {view === 'analysis' && (
+          <AnalysisView
+            key={viewResetKey}
+            tables={tbl.data}
+            queries={qs.data}
+            systems={sys.data}
+            schedules={sc.data}
+            tablesLoading={tbl.loading}
+            queriesLoading={qs.loading}
+            tablesError={tbl.error}
+            queriesError={qs.error}
+            onClearTablesError={tbl.clearError}
+            onClearQueriesError={qs.clearError}
+            onRefresh={refreshAll}
+            onConfigureTable={configureTableFromLineage}
+            onRunAllLineage={(ids) => bulkTriggerNow('table', ids)}
+            onTrigger={triggerNow}
+            onEditTable={setEditingTable}
+            onEditQuery={setEditingQuery}
           />
         )}
 

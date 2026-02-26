@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS control.datasets (
   options          JSONB NOT NULL DEFAULT '{}'::jsonb,   -- tolerances, null eq, coercions
   is_active        BOOLEAN NOT NULL DEFAULT TRUE,
   config_overrides JSONB DEFAULT NULL,                   -- entity-specific validation config overrides
+  lineage          JSONB DEFAULT NULL,                   -- upstream lineage (populated via Databricks Lineage API)
 
   created_by       TEXT NOT NULL,
   updated_by       TEXT NOT NULL,
@@ -69,6 +70,7 @@ CREATE TABLE IF NOT EXISTS control.compare_queries (
   options          JSONB NOT NULL DEFAULT '{}'::jsonb,
   is_active        BOOLEAN NOT NULL DEFAULT TRUE,
   config_overrides JSONB DEFAULT NULL,                   -- entity-specific validation config overrides
+  lineage          JSONB DEFAULT NULL,                   -- upstream lineage (populated via Databricks Lineage API)
 
   created_by       TEXT NOT NULL,
   updated_by       TEXT NOT NULL,

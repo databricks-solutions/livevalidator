@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { ErrorBox } from '../components/ErrorBox';
-import { TagBadge } from '../components/TagBadge';
 import { SampleDifferencesModal } from '../components/modals/SampleDifferencesModal';
 import { ValidationResultsTable } from '../components/ValidationResultsTable';
+import { ResultFilterBar } from '../components/ResultFilterBar';
+import { useTagFilter } from '../hooks/useTagFilter';
 import { validationService } from '../services/api';
 
 // Debounce hook
@@ -22,7 +23,6 @@ export function ValidationResultsView({ highlightId, onClearHighlight, onNavigat
   
   // Filter input states (immediate)
   const [entityNameInput, setEntityNameInput] = useState('');
-  const [filterTags, setFilterTags] = useState([]);
   const [entityType, setEntityType] = useState('');
   const [status, setStatus] = useState('');
   const [sourceSystem, setSourceSystem] = useState('');
@@ -36,13 +36,6 @@ export function ValidationResultsView({ highlightId, onClearHighlight, onNavigat
   
   // Debounced filter values (for API calls)
   const debouncedEntityName = useDebounce(entityNameInput, 300);
-  
-  // Tag input state
-  const [tagInput, setTagInput] = useState('');
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
-  const tagInputRef = useRef(null);
-  const inputElementRef = useRef(null);
   
   // Data state
   const [data, setData] = useState([]);
@@ -78,6 +71,14 @@ export function ValidationResultsView({ highlightId, onClearHighlight, onNavigat
       .then(tags => setAllTags(tags.map(t => t.name)))
       .catch(() => {});
   }, []);
+
+  // Tag filter hook - reset page when tags change
+  const resetPage = useCallback(() => setPage(0), []);
+  const {
+    filterTags, tagInput, setTagInput, showSuggestions, setShowSuggestions,
+    selectedSuggestionIndex, tagInputRef, inputElementRef, tagSuggestions,
+    addTagFilter, removeTagFilter, clearTags, handleTagKeyDown,
+  } = useTagFilter(allTags, resetPage);
 
   // Calculate date range based on preset
   const getDateRange = useCallback(() => {
@@ -230,62 +231,6 @@ export function ValidationResultsView({ highlightId, onClearHighlight, onNavigat
     }
   };
 
-  // Tag handlers
-  const addTagFilter = (tag) => {
-    if (tag && !filterTags.includes(tag)) {
-      setFilterTags(prev => [...prev, tag]);
-      setPage(0);
-    }
-    setTagInput('');
-    setShowSuggestions(false);
-    setSelectedSuggestionIndex(0);
-  };
-
-  const removeTagFilter = (tag) => {
-    setFilterTags(prev => prev.filter(t => t !== tag));
-    setPage(0);
-  };
-
-  const tagSuggestions = useMemo(() => {
-    if (!tagInput.trim()) return [];
-    const input = tagInput.toLowerCase();
-    return allTags
-      .filter(tag => tag.toLowerCase().includes(input) && !filterTags.includes(tag))
-      .slice(0, 10);
-  }, [tagInput, allTags, filterTags]);
-
-  useEffect(() => {
-    setSelectedSuggestionIndex(0);
-  }, [tagSuggestions]);
-
-  const handleTagKeyDown = (e) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setSelectedSuggestionIndex(prev => Math.min(prev + 1, tagSuggestions.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setSelectedSuggestionIndex(prev => Math.max(prev - 1, 0));
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (tagSuggestions.length > 0) addTagFilter(tagSuggestions[selectedSuggestionIndex]);
-    } else if (e.key === 'Escape') {
-      setShowSuggestions(false);
-      setTagInput('');
-    } else if (e.key === 'Backspace' && !tagInput && filterTags.length > 0) {
-      removeTagFilter(filterTags[filterTags.length - 1]);
-    }
-  };
-
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (tagInputRef.current && !tagInputRef.current.contains(e.target)) {
-        setShowSuggestions(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
   // Selection handlers
   const toggleSelectAll = () => {
     if (selectedIds.length === data.length) {
@@ -325,7 +270,7 @@ export function ValidationResultsView({ highlightId, onClearHighlight, onNavigat
     setStatus('');
     setSourceSystem('');
     setTargetSystem('');
-    setFilterTags([]);
+    clearTags();
     setDateFrom('');
     setDateTo('');
     setActivePreset('7d');
@@ -434,108 +379,40 @@ export function ValidationResultsView({ highlightId, onClearHighlight, onNavigat
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="p-2 bg-charcoal-400 border-b border-charcoal-200">
-          <div className="flex justify-between items-center mb-2 min-h-[24px]">
-            <span className="text-gray-300 text-sm font-semibold">Filters:</span>
-            {hasActiveFilters && (
-              <button
-                onClick={clearAllFilters}
-                className="px-2 py-0.5 text-xs rounded bg-red-900/40 text-red-300 border border-red-700 hover:bg-red-900/60 transition-all"
-              >
-                Clear All
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
-            <input
-              type="text"
-              placeholder="Filter by entity..."
-              value={entityNameInput}
-              onChange={(e) => { setEntityNameInput(e.target.value); setPage(0); }}
-              className="px-2 py-1 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm focus:outline-none focus:border-rust-light"
-            />
-            
-            {/* Tag Filter with Autocomplete */}
-            <div className="relative" ref={tagInputRef}>
-              <div 
-                className="flex flex-wrap gap-1 items-center px-2 py-1 bg-charcoal-600 border border-charcoal-300 rounded min-h-[34px] cursor-text focus-within:border-rust-light"
-                onClick={() => inputElementRef.current?.focus()}
-              >
-                {filterTags.map(tag => (
-                  <TagBadge key={tag} tag={tag} onRemove={() => removeTagFilter(tag)} />
-                ))}
-                <input
-                  ref={inputElementRef}
-                  type="text"
-                  placeholder={filterTags.length === 0 ? "Filter by tags..." : ""}
-                  value={tagInput}
-                  onChange={(e) => { setTagInput(e.target.value); setShowSuggestions(true); }}
-                  onKeyDown={handleTagKeyDown}
-                  onFocus={() => setShowSuggestions(true)}
-                  className="flex-1 min-w-[60px] bg-transparent border-0 text-gray-200 text-sm focus:outline-none placeholder-gray-500"
-                />
-              </div>
-              {showSuggestions && tagSuggestions.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-charcoal-600 border border-charcoal-300 rounded shadow-lg max-h-48 overflow-y-auto">
-                  {tagSuggestions.map((tag, idx) => (
-                    <button
-                      key={tag}
-                      onClick={() => addTagFilter(tag)}
-                      className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                        idx === selectedSuggestionIndex
-                          ? 'bg-purple-600 text-white'
-                          : 'text-gray-200 hover:bg-charcoal-500'
-                      }`}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <select
-              value={entityType}
-              onChange={(e) => { setEntityType(e.target.value); setPage(0); }}
-              className="px-2 py-1 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm focus:outline-none focus:border-rust-light hover:border-charcoal-100 transition-colors cursor-pointer"
-            >
-              <option value="">All Types</option>
-              <option value="table">Table</option>
-              <option value="compare_query">Query</option>
-            </select>
-            <select
-              value={status}
-              onChange={(e) => { setStatus(e.target.value); setPage(0); }}
-              className="px-2 py-1 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm focus:outline-none focus:border-rust-light hover:border-charcoal-100 transition-colors cursor-pointer"
-            >
-              <option value="">All Statuses</option>
-              <option value="succeeded">Succeeded</option>
-              <option value="failed">Failed</option>
-              <option value="error">Error</option>
-            </select>
-            <select
-              value={sourceSystem}
-              onChange={(e) => { setSourceSystem(e.target.value); setPage(0); }}
-              className="px-2 py-1 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm focus:outline-none focus:border-rust-light hover:border-charcoal-100 transition-colors cursor-pointer"
-            >
-              <option value="">All Sources</option>
-              {availableSystems.map(sys => (
-                <option key={sys} value={sys}>{sys}</option>
-              ))}
-            </select>
-            <select
-              value={targetSystem}
-              onChange={(e) => { setTargetSystem(e.target.value); setPage(0); }}
-              className="px-2 py-1 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm focus:outline-none focus:border-rust-light hover:border-charcoal-100 transition-colors cursor-pointer"
-            >
-              <option value="">All Targets</option>
-              {availableSystems.map(sys => (
-                <option key={sys} value={sys}>{sys}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+        <ResultFilterBar
+          entityName={entityNameInput}
+          onEntityNameChange={(v) => { setEntityNameInput(v); setPage(0); }}
+          filterTags={filterTags}
+          tagInput={tagInput}
+          onTagInputChange={setTagInput}
+          showSuggestions={showSuggestions}
+          onShowSuggestionsChange={setShowSuggestions}
+          tagSuggestions={tagSuggestions}
+          selectedSuggestionIndex={selectedSuggestionIndex}
+          onAddTag={addTagFilter}
+          onRemoveTag={removeTagFilter}
+          onTagKeyDown={handleTagKeyDown}
+          tagInputRef={tagInputRef}
+          inputElementRef={inputElementRef}
+          entityType={entityType}
+          onEntityTypeChange={(v) => { setEntityType(v); setPage(0); }}
+          typeOptions={[
+            { value: '', label: 'All Types' },
+            { value: 'table', label: 'Table' },
+            { value: 'compare_query', label: 'Query' },
+          ]}
+          showStatusFilter={true}
+          status={status}
+          onStatusChange={(v) => { setStatus(v); setPage(0); }}
+          showSystemFilters={true}
+          sourceSystem={sourceSystem}
+          onSourceSystemChange={(v) => { setSourceSystem(v); setPage(0); }}
+          targetSystem={targetSystem}
+          onTargetSystemChange={(v) => { setTargetSystem(v); setPage(0); }}
+          availableSystems={availableSystems}
+          hasActiveFilters={hasActiveFilters}
+          onClearAll={clearAllFilters}
+        />
 
         {/* Results Table */}
         {loading && data.length === 0 ? (

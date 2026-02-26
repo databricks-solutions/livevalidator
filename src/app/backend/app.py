@@ -483,6 +483,8 @@ async def list_tables(q: Optional[str] = None):
                 vh.status as last_run_status,
                 vh.finished_at as last_run_timestamp,
                 vh.error_message as last_run_error,
+                vh.row_count_match as last_run_row_count_match,
+                vh.rows_different as last_run_rows_different,
                 COALESCE(
                     (SELECT json_agg(t.name ORDER BY t.name)
                      FROM control.entity_tags et
@@ -499,7 +501,7 @@ async def list_tables(q: Optional[str] = None):
                 ) as schedules
             FROM control.datasets d
             LEFT JOIN LATERAL (
-                SELECT id, status, finished_at, error_message
+                SELECT id, status, finished_at, error_message, row_count_match, rows_different
                 FROM control.validation_history
                 WHERE entity_type = 'table' AND entity_id = d.id
                 ORDER BY finished_at DESC
@@ -516,6 +518,8 @@ async def list_tables(q: Optional[str] = None):
                 vh.status as last_run_status,
                 vh.finished_at as last_run_timestamp,
                 vh.error_message as last_run_error,
+                vh.row_count_match as last_run_row_count_match,
+                vh.rows_different as last_run_rows_different,
                 COALESCE(
                     (SELECT json_agg(t.name ORDER BY t.name)
                      FROM control.entity_tags et
@@ -532,7 +536,7 @@ async def list_tables(q: Optional[str] = None):
                 ) as schedules
             FROM control.datasets d
             LEFT JOIN LATERAL (
-                SELECT id, status, finished_at, error_message
+                SELECT id, status, finished_at, error_message, row_count_match, rows_different
                 FROM control.validation_history
                 WHERE entity_type = 'table' AND entity_id = d.id
                 ORDER BY finished_at DESC
@@ -766,6 +770,8 @@ async def list_queries(q: Optional[str] = None):
                 vh.status as last_run_status,
                 vh.finished_at as last_run_timestamp,
                 vh.error_message as last_run_error,
+                vh.row_count_match as last_run_row_count_match,
+                vh.rows_different as last_run_rows_different,
                 COALESCE(
                     (SELECT json_agg(t.name ORDER BY t.name)
                      FROM control.entity_tags et
@@ -782,7 +788,7 @@ async def list_queries(q: Optional[str] = None):
                 ) as schedules
             FROM control.compare_queries cq
             LEFT JOIN LATERAL (
-                SELECT id, status, finished_at, error_message
+                SELECT id, status, finished_at, error_message, row_count_match, rows_different
                 FROM control.validation_history
                 WHERE entity_type = 'compare_query' AND entity_id = cq.id
                 ORDER BY finished_at DESC
@@ -799,6 +805,8 @@ async def list_queries(q: Optional[str] = None):
                 vh.status as last_run_status,
                 vh.finished_at as last_run_timestamp,
                 vh.error_message as last_run_error,
+                vh.row_count_match as last_run_row_count_match,
+                vh.rows_different as last_run_rows_different,
                 COALESCE(
                     (SELECT json_agg(t.name ORDER BY t.name)
                      FROM control.entity_tags et
@@ -815,7 +823,7 @@ async def list_queries(q: Optional[str] = None):
                 ) as schedules
             FROM control.compare_queries cq
             LEFT JOIN LATERAL (
-                SELECT id, status, finished_at, error_message
+                SELECT id, status, finished_at, error_message, row_count_match, rows_different
                 FROM control.validation_history
                 WHERE entity_type = 'compare_query' AND entity_id = cq.id
                 ORDER BY finished_at DESC
@@ -2108,6 +2116,114 @@ async def update_validation_history(id: int, body: dict):
         raise HTTPException(404, f"Validation history record {id} not found")
     
     return {"id": id, "ok": True, "updated_fields": list(updates.keys())}
+
+
+@api.post("/tables/{id}/fetch-lineage")
+async def fetch_lineage_for_table(id: int, system: str = "source"):
+    """
+    Start a Databricks lineage job for a configured table (dataset).
+    Lineage is available when the source or target system is Databricks.
+    Pass ?system=source (default) or ?system=target to choose which side to query.
+    The job will PATCH the lineage result back to this dataset when done.
+    """
+    row = await fetchrow("SELECT * FROM control.datasets WHERE id=$1", id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Table not found")
+
+    if system not in ("source", "target"):
+        raise HTTPException(status_code=400, detail="system must be 'source' or 'target'")
+
+    system_id = row["src_system_id"] if system == "source" else row["tgt_system_id"]
+    chosen_system = await fetchrow("SELECT id, kind, catalog FROM control.systems WHERE id=$1", system_id)
+    if not chosen_system:
+        raise HTTPException(status_code=404, detail=f"{system.capitalize()} system not found")
+    if chosen_system["kind"] != "Databricks":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Lineage is only available for Databricks systems ({system} system is {chosen_system['kind']})"
+        )
+
+    schema_col = "src_schema" if system == "source" else "tgt_schema"
+    table_col = "src_table" if system == "source" else "tgt_table"
+    schema_val = (row.get(schema_col) or "").strip()
+    table_val = (row.get(table_col) or "").strip()
+    if not schema_val or not table_val:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{system.capitalize()} schema and table are required for lineage"
+        )
+
+    catalog = (chosen_system.get("catalog") or "").strip()
+    if not catalog:
+        raise HTTPException(status_code=400, detail=f"{system.capitalize()} system has no catalog configured")
+
+    table_name = f"{catalog}.{schema_val}.{table_val}"
+
+    await execute("UPDATE control.datasets SET lineage = NULL WHERE id=$1", id)
+
+    job_id = os.environ.get("LINEAGE_JOB_ID")
+    if not job_id:
+        raise HTTPException(status_code=500, detail="LINEAGE_JOB_ID not configured")
+
+    backend_url = os.environ.get("DATABRICKS_APP_URL", "").rstrip("/")
+    if not backend_url:
+        raise HTTPException(status_code=500, detail="DATABRICKS_APP_URL not configured")
+
+    params = {
+        "table_name": table_name,
+        "catalog_name": catalog,
+        "backend_api_url": backend_url,
+        "entity_type": "table",
+        "entity_id": str(id),
+    }
+    try:
+        w = WorkspaceClient()
+        run = w.jobs.run_now(job_id=int(job_id), job_parameters=params)
+        run_url = f"{w.config.host}/jobs/{job_id}/runs/{run.run_id}"
+        return {"ok": True, "message": "Lineage fetch started", "run_id": run.run_id, "run_url": run_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start lineage job: {str(e)}")
+
+
+@api.patch("/tables/{id}/lineage")
+async def update_table_lineage(id: int, body: dict):
+    """
+    Update the lineage JSONB field on a dataset. Called by the fetch-lineage job.
+    Body: {"lineage": [...]}
+    """
+    lineage = body.get("lineage")
+    await execute(
+        "UPDATE control.datasets SET lineage = $1::jsonb WHERE id = $2",
+        json.dumps(lineage) if lineage is not None else None, id
+    )
+    return {"ok": True}
+
+
+@api.post("/queries/{id}/fetch-lineage")
+async def fetch_lineage_for_query(id: int):
+    """
+    Lineage fetch for queries is not supported at this time.
+    Only tables (datasets) can fetch lineage.
+    """
+    raise HTTPException(
+        status_code=400,
+        detail="Lineage is only supported for tables at this time. Query lineage is not available."
+    )
+
+
+@api.patch("/queries/{id}/lineage")
+async def update_query_lineage(id: int, body: dict):
+    """
+    Update the lineage JSONB field on a compare_query. Called by the fetch-lineage job.
+    Body: {"lineage": [...]}
+    """
+    lineage = body.get("lineage")
+    await execute(
+        "UPDATE control.compare_queries SET lineage = $1::jsonb WHERE id = $2",
+        json.dumps(lineage) if lineage is not None else None, id
+    )
+    return {"ok": True}
+
 
 @api.delete("/validation-history")
 async def delete_validation_history(body: dict):
