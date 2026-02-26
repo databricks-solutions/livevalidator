@@ -26,6 +26,10 @@ resources:
           job:
             id: ${resources.jobs.run_validation.id}
             permission: 'CAN_MANAGE_RUN'
+        - name: fetch-lineage
+          job:
+            id: ${resources.jobs.fetch_lineage.id}
+            permission: 'CAN_MANAGE_RUN'
 
   database_instances:
     live_validator_database:

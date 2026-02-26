@@ -82,6 +82,10 @@ CREATE TABLE IF NOT EXISTS control.compare_queries (
 CREATE INDEX IF NOT EXISTS compare_queries_active_idx ON control.compare_queries (name) WHERE is_active;
 CREATE INDEX IF NOT EXISTS compare_queries_src_tgt_idx ON control.compare_queries (src_system_id, tgt_system_id);
 
+-- Schema migrations: add columns introduced after initial release
+ALTER TABLE control.datasets ADD COLUMN IF NOT EXISTS lineage JSONB DEFAULT NULL;
+ALTER TABLE control.compare_queries ADD COLUMN IF NOT EXISTS lineage JSONB DEFAULT NULL;
+
 -- 4) Schedules (cron-ish) + state
 CREATE TABLE IF NOT EXISTS control.schedules (
   id               BIGSERIAL PRIMARY KEY,
