@@ -52,6 +52,8 @@ const STATUS_BADGE = {
   succeeded: { cls: 'bg-green-900/40 text-green-300 border-green-700', icon: '✓', label: 'Success' },
   failed:    { cls: 'bg-red-900/40 text-red-300 border-red-700', icon: '✗', label: 'Failed' },
   error:     { cls: 'bg-orange-900/40 text-orange-300 border-orange-700', icon: '⚠', label: 'Error' },
+  queued:    { cls: 'bg-blue-600 text-white border-blue-600', icon: '⏳', label: 'QUEUED' },
+  running:   { cls: 'bg-orange-600 text-white border-orange-600', icon: '▶', label: 'RUNNING' },
 };
 
 // ─── Entity Detail Page ───────────────────────────────────────────────
@@ -67,6 +69,7 @@ function EntityDetailView({ entity, tables, systems, schedules, onBack, onConfig
   const [triggerRunning, setTriggerRunning] = useState(false);
   const [toast, setToast] = useState(null);
   const [sqlExpanded, setSqlExpanded] = useState(false);
+  const [pendingTriggers, setPendingTriggers] = useState([]);
 
   const entityType = entity._entityType === 'table' ? 'table' : 'compare_query';
   const apiPath = entity._entityType === 'table' ? 'tables' : 'queries';
@@ -77,23 +80,42 @@ function EntityDetailView({ entity, tables, systems, schedules, onBack, onConfig
   const { items: parsedLineage, entityObjectType } = parseLineageData(entity.lineage);
   const [showSystemPicker, setShowSystemPicker] = useState(false);
 
-  // Fetch all runs for this entity
-  const fetchRuns = () => {
-    setRunsLoading(true);
+  // Fetch pending triggers for this entity
+  const fetchPending = () => {
+    fetch('/api/triggers')
+      .then(r => r.json())
+      .then(triggers => {
+        const mine = triggers.filter(t => t.entity_type === entityType && t.entity_id === entity.id);
+        setPendingTriggers(mine);
+      })
+      .catch(() => setPendingTriggers([]));
+  };
+
+  // Fetch all runs for this entity (showLoading=false for silent refresh)
+  const fetchRuns = (showLoading = true) => {
+    if (showLoading) setRunsLoading(true);
+    fetchPending();
     fetch(`/api/validation-history?entity_type=${entityType}&entity_id=${entity.id}&days_back=7&limit=100`)
       .then(r => r.json())
       .then(resp => {
         const data = resp.data || [];
         setRuns(data);
-        setRunsLoading(false);
+        if (showLoading) setRunsLoading(false);
         if (data.length > 0 && !selectedRunId) {
           setSelectedRunId(data[0].id);
         }
       })
-      .catch(() => { setRuns([]); setRunsLoading(false); });
+      .catch(() => { setRuns([]); if (showLoading) setRunsLoading(false); });
   };
 
   useEffect(() => { fetchRuns(); }, [entity.id, entityType]);
+
+  // Auto-refresh both lists every 5s when there are pending triggers (silent)
+  useEffect(() => {
+    if (pendingTriggers.length === 0) return;
+    const interval = setInterval(() => fetchRuns(false), 5000);
+    return () => clearInterval(interval);
+  }, [pendingTriggers.length, entityType, entity.id]);
 
   // Fetch detail when selected run changes
   useEffect(() => {
@@ -176,6 +198,7 @@ function EntityDetailView({ entity, tables, systems, schedules, onBack, onConfig
     setTriggerRunning(true);
     try {
       await onTrigger(entityType, entity.id);
+      fetchPending();
       setTimeout(fetchRuns, 1000);
     } finally {
       setTriggerRunning(false);
@@ -463,12 +486,45 @@ function EntityDetailView({ entity, tables, systems, schedules, onBack, onConfig
 
         {runsLoading ? (
           <div className="p-6 text-gray-400 text-sm">Loading run history...</div>
-        ) : runs.length === 0 ? (
+        ) : runs.length === 0 && pendingTriggers.length === 0 ? (
           <div className="p-6 text-gray-500 text-sm">No validation runs in the last 7 days.</div>
         ) : (
           <div className="flex flex-1 min-h-0">
             {/* Left: Run list */}
             <div className="w-72 flex-shrink-0 border-r border-charcoal-200 overflow-y-auto">
+              {/* Pending triggers */}
+              {pendingTriggers.map((trigger) => {
+                const badge = STATUS_BADGE[trigger.status];
+                return (
+                  <div
+                    key={`trigger-${trigger.id}`}
+                    className={`px-3 py-2.5 border-b border-charcoal-300/30 border-l-2 border-l-transparent ${
+                      trigger.status === 'running' ? 'animate-pulse' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`px-1.5 py-0.5 text-[10px] rounded-full border ${badge.cls}`}>
+                        {badge.icon} {badge.label}
+                      </span>
+                      <span className="text-gray-400 text-[10px] ml-auto">
+                        {formatRelativeTime(trigger.created_at)}
+                      </span>
+                    </div>
+                    {trigger.databricks_run_url && (
+                      <a
+                        href={trigger.databricks_run_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        View in Databricks →
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
+              {/* Completed runs */}
               {runs.map((run) => {
                 const badge = STATUS_BADGE[run.status] || STATUS_BADGE.error;
                 const isSelected = selectedRunId === run.id;
