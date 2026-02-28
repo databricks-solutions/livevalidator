@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 
 from fastapi import HTTPException
 
+from backend.utils import raise_version_conflict
+
 if TYPE_CHECKING:
     from backend.dependencies import DBSession
 
@@ -205,7 +207,7 @@ class TablesService:
 
         if not row:
             current = await self.db.fetchrow("SELECT * FROM control.datasets WHERE id=$1", table_id)
-            raise HTTPException(status_code=409, detail={"error": "version_conflict", "current": current})
+            raise_version_conflict(current)
         return row
 
     async def delete_table(self, table_id: int) -> dict:

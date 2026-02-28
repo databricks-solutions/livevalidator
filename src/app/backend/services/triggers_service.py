@@ -2,25 +2,15 @@
 
 import json
 import os
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException
 
+from backend.utils import serialize_row
+
 if TYPE_CHECKING:
     from backend.dependencies import DBSession
     from backend.services.databricks_service import DatabricksService
-
-
-def serialize_row(row: dict | None) -> dict | None:
-    """Convert a database row to a JSON-serializable dict (handles datetime)."""
-    if row is None:
-        return None
-    result = dict(row)
-    for k, v in result.items():
-        if isinstance(v, datetime):
-            result[k] = v.isoformat()
-    return result
 
 
 class TriggersService:

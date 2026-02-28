@@ -4,21 +4,10 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from zoneinfo import available_timezones
 
-from fastapi import HTTPException
+from backend.utils import raise_version_conflict, serialize_row
 
 if TYPE_CHECKING:
     from backend.dependencies import DBSession
-
-
-def serialize_row(row: dict | None) -> dict | None:
-    """Convert a database row to a JSON-serializable dict (handles datetime)."""
-    if row is None:
-        return None
-    result = dict(row)
-    for k, v in result.items():
-        if isinstance(v, datetime):
-            result[k] = v.isoformat()
-    return result
 
 
 class SchedulesService:
@@ -107,9 +96,7 @@ class SchedulesService:
 
         if not row:
             current = await self.db.fetchrow("SELECT * FROM control.schedules WHERE id=$1", schedule_id)
-            raise HTTPException(
-                status_code=409, detail={"error": "version_conflict", "current": serialize_row(current)}
-            )
+            raise_version_conflict(current)
         return serialize_row(row)
 
     async def delete_schedule(self, schedule_id: int) -> dict:

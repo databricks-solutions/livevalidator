@@ -1,24 +1,14 @@
 """Dashboards service."""
 
 import json
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException
 
+from backend.utils import raise_version_conflict, serialize_row
+
 if TYPE_CHECKING:
     from backend.dependencies import DBSession
-
-
-def serialize_row(row: dict | None) -> dict | None:
-    """Convert a database row to a JSON-serializable dict (handles datetime)."""
-    if row is None:
-        return None
-    result = dict(row)
-    for k, v in result.items():
-        if isinstance(v, datetime):
-            result[k] = v.isoformat()
-    return result
 
 
 class DashboardsService:
@@ -136,9 +126,7 @@ class DashboardsService:
 
         if not row:
             current = await self.db.fetchrow("SELECT * FROM control.dashboards WHERE id=$1", dashboard_id)
-            raise HTTPException(
-                status_code=409, detail={"error": "version_conflict", "current": serialize_row(current)}
-            )
+            raise_version_conflict(current)
         return serialize_row(row)
 
     async def delete_dashboard(self, dashboard_id: int) -> dict:
