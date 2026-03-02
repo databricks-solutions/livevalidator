@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { TagList } from './TagBadge';
 import { Checkbox } from './Checkbox';
+import { parseArray } from '../utils/arrays';
 
 // Error popover component
 function ErrorPopover({ error, onClose }) {
@@ -71,15 +72,6 @@ export function ValidationResultsTable({
   const [errorModal, setErrorModal] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  // Helper to safely parse arrays (tags may be JSON string or array)
-  const parseArray = (arr) => {
-    if (!arr) return [];
-    if (Array.isArray(arr)) return arr;
-    if (typeof arr === 'string') {
-      try { return JSON.parse(arr); } catch { return []; }
-    }
-    return [];
-  };
 
   // Copy table data to clipboard as TSV (paste into Excel/Sheets)
   const handleCopyToClipboard = async () => {

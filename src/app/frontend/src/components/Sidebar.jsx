@@ -1,5 +1,5 @@
 import React from 'react';
-import { useCurrentUser } from '../App';
+import { useCurrentUser } from '../context/UserContext';
 
 export function Sidebar({ view, setView, setupRequired }) {
   const currentUser = useCurrentUser();

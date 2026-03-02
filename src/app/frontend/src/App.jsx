@@ -1,35 +1,12 @@
-import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 
 // Hooks
 import { useFetch } from './hooks/useFetch';
 
-// Create context for current user
-const CurrentUserContext = createContext(null);
-export const useCurrentUser = () => useContext(CurrentUserContext);
-
-// Permission check helpers
-export const canCreate = (role) => {
-  if (!role) return false;
-  return ['CAN_RUN', 'CAN_EDIT', 'CAN_MANAGE'].includes(role);
-};
-
-export const canRun = (role) => {
-  if (!role) return false;
-  return ['CAN_RUN', 'CAN_EDIT', 'CAN_MANAGE'].includes(role);
-};
-
-export const canEdit = (role, createdBy, currentUserEmail) => {
-  if (!role) return false;
-  if (role === 'CAN_VIEW') return false;
-  if (['CAN_EDIT', 'CAN_MANAGE'].includes(role)) return true;
-  // CAN_RUN can only edit their own creations
-  return role === 'CAN_RUN' && createdBy === currentUserEmail;
-};
-
-export const canManageSystems = (role) => {
-  return role === 'CAN_MANAGE';
-};
+// Context
+import { CurrentUserContext, useCurrentUser, canCreate, canRun, canEdit, canManageSystems } from './context/UserContext';
+export { useCurrentUser, canCreate, canRun, canEdit, canManageSystems };
 
 // Components
 import { Sidebar } from './components/Sidebar';

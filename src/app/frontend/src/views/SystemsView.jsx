@@ -1,6 +1,6 @@
 import React from 'react';
 import { ErrorBox } from '../components/ErrorBox';
-import { useCurrentUser, canManageSystems } from '../App';
+import { useCurrentUser, canManageSystems } from '../context/UserContext';
 
 export function SystemsView({ 
   data, 

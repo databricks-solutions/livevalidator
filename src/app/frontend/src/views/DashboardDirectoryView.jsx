@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { useCurrentUser } from '../App';
+import { useCurrentUser } from '../context/UserContext';
 import { Checkbox } from '../components/Checkbox';
 import { dashboardService, apiCall } from '../services/api';
 

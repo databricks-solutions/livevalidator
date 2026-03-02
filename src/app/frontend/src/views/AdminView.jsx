@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useCurrentUser } from '../App';
+import { useCurrentUser } from '../context/UserContext';
 import { API } from '../services/api';
 
 export function AdminView() {
