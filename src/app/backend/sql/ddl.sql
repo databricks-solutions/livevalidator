@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS control.datasets (
   exclude_columns  TEXT[] NOT NULL DEFAULT '{}',
   options          JSONB NOT NULL DEFAULT '{}'::jsonb,   -- tolerances, null eq, coercions
   is_active        BOOLEAN NOT NULL DEFAULT TRUE,
-  config_overrides JSONB DEFAULT NULL,                   -- entity-specific validation config overrides
+  config_overrides JSONB DEFAULT NULL,                   -- DEPRECATED: use control.config table instead
   lineage          JSONB DEFAULT NULL,                   -- upstream lineage (populated via Databricks Lineage API)
 
   created_by       TEXT NOT NULL,
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS control.compare_queries (
   watermark_filter TEXT DEFAULT NULL,                    -- optional WHERE clause filter
   options          JSONB NOT NULL DEFAULT '{}'::jsonb,
   is_active        BOOLEAN NOT NULL DEFAULT TRUE,
-  config_overrides JSONB DEFAULT NULL,                   -- entity-specific validation config overrides
+  config_overrides JSONB DEFAULT NULL,                   -- DEPRECATED: use control.config table instead
   lineage          JSONB DEFAULT NULL,                   -- upstream lineage (populated via Databricks Lineage API)
 
   created_by       TEXT NOT NULL,
@@ -238,7 +238,8 @@ CREATE TABLE IF NOT EXISTS control.entity_tags (
 -- Index for fast tag lookups by entity (used in validation-history query)
 CREATE INDEX IF NOT EXISTS entity_tags_entity_idx ON control.entity_tags (entity_type, entity_id);
 
--- 9) Global validation configuration (singleton table)
+-- 9) Global validation configuration (legacy singleton table - DEPRECATED)
+-- Use control.config table instead for new configurations
 CREATE TABLE IF NOT EXISTS control.validation_config (
   id                      INTEGER PRIMARY KEY DEFAULT 1,
   downgrade_unicode       BOOLEAN NOT NULL DEFAULT FALSE,
@@ -253,6 +254,20 @@ CREATE TABLE IF NOT EXISTS control.validation_config (
 INSERT INTO control.validation_config (id, downgrade_unicode, replace_special_char, extra_replace_regex, updated_by)
 VALUES (1, FALSE, ARRAY['7F','?'], E'\\\\.\\\\.\\\\.',  'system')
 ON CONFLICT (id) DO NOTHING;
+
+-- 9b) Flexible configuration (scoped: global, table, compare_query)
+-- Replaces validation_config and config_overrides columns
+CREATE TABLE IF NOT EXISTS control.config (
+  id          BIGSERIAL PRIMARY KEY,
+  scope       TEXT NOT NULL,           -- 'global', 'table', 'compare_query'
+  scope_id    INTEGER,                 -- NULL for global, entity_id for overrides
+  settings    JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_by  TEXT,
+  updated_at  TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS config_scope_unique 
+  ON control.config (scope, COALESCE(scope_id, -1));
 
 -- 10) Type transformations for cross-system validations
 CREATE TABLE IF NOT EXISTS control.type_transformations (
@@ -343,3 +358,35 @@ CREATE INDEX IF NOT EXISTS dashboard_charts_dashboard_idx ON control.dashboard_c
 -- 1) Add lineage column to datasets and compare_queries
 ALTER TABLE control.datasets ADD COLUMN IF NOT EXISTS lineage JSONB DEFAULT NULL;
 ALTER TABLE control.compare_queries ADD COLUMN IF NOT EXISTS lineage JSONB DEFAULT NULL;
+
+-- 2) Migrate existing config to control.config table
+-- Migrate global config from legacy validation_config table
+INSERT INTO control.config (scope, scope_id, settings, updated_by, updated_at)
+SELECT 'global', NULL,
+  jsonb_build_object(
+    'downgrade_unicode', downgrade_unicode,
+    'replace_special_char', replace_special_char,
+    'extra_replace_regex', extra_replace_regex
+  ),
+  updated_by, updated_at
+FROM control.validation_config WHERE id = 1
+ON CONFLICT (scope, COALESCE(scope_id, -1)) DO NOTHING;
+
+-- Seed empty global config if no migration occurred
+INSERT INTO control.config (scope, scope_id, settings, updated_by)
+VALUES ('global', NULL, '{}'::jsonb, 'system')
+ON CONFLICT (scope, COALESCE(scope_id, -1)) DO NOTHING;
+
+-- Migrate entity-level config_overrides to control.config (datasets)
+INSERT INTO control.config (scope, scope_id, settings, updated_by, updated_at)
+SELECT 'table', id, config_overrides, updated_by, updated_at
+FROM control.datasets 
+WHERE config_overrides IS NOT NULL AND config_overrides != '{}'::jsonb
+ON CONFLICT (scope, COALESCE(scope_id, -1)) DO NOTHING;
+
+-- Migrate entity-level config_overrides to control.config (compare_queries)
+INSERT INTO control.config (scope, scope_id, settings, updated_by, updated_at)
+SELECT 'compare_query', id, config_overrides, updated_by, updated_at
+FROM control.compare_queries 
+WHERE config_overrides IS NOT NULL AND config_overrides != '{}'::jsonb
+ON CONFLICT (scope, COALESCE(scope_id, -1)) DO NOTHING;

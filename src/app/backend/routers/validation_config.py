@@ -1,6 +1,6 @@
 """Validation config router."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from backend.dependencies import DBSession, get_current_user_email, get_db
 from backend.models import ValidatePythonCode
@@ -24,6 +24,19 @@ async def update_validation_config(
 ):
     service = ValidationConfigService(db, user_email)
     return await service.update_validation_config(body)
+
+
+@router.get("/validation-config/effective")
+async def get_effective_config(
+    entity_type: str,
+    entity_id: int,
+    db: DBSession = Depends(get_db),
+):
+    """Get effective config for an entity (table/compare_query) by ID."""
+    if entity_type not in ("table", "compare_query"):
+        raise HTTPException(status_code=400, detail="entity_type must be 'table' or 'compare_query'")
+    service = ValidationConfigService(db)
+    return await service.get_effective_config(entity_type, entity_id)
 
 
 @router.post("/validate-python")

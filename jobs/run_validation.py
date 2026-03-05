@@ -40,10 +40,8 @@ dbutils.widgets.text("compare_mode", "except_all")
 dbutils.widgets.text("pk_columns", "")
 dbutils.widgets.text("include_columns", "[]")
 dbutils.widgets.text("exclude_columns", "[]")
-dbutils.widgets.text("downgrade_unicode", "false")
-dbutils.widgets.text("replace_special_char", "[]")
-dbutils.widgets.text("extra_replace_regex", "")
 dbutils.widgets.text("options", "")
+dbutils.widgets.text("config", "{}")
 
 # COMMAND ----------
 
@@ -61,10 +59,14 @@ compare_mode: str = dbutils.widgets.get("compare_mode")
 pk_columns: list[str] = [c for c in json.loads(dbutils.widgets.get("pk_columns") or "[]") if c]
 include_columns: list[str] = [c for c in json.loads(dbutils.widgets.get("include_columns") or "[]") if c]
 exclude_columns: list[str] = [c for c in json.loads(dbutils.widgets.get("exclude_columns") or "[]") if c]
-downgrade_unicode_enabled: bool = dbutils.widgets.get("downgrade_unicode").lower() == "true"
-replace_special_char: list[str] = json.loads(dbutils.widgets.get("replace_special_char") or "[]")
-extra_replace_regex: str = dbutils.widgets.get("extra_replace_regex")
 options: dict = json.loads(dbutils.widgets.get("options") or "{}")
+
+# Parse unified config
+config: dict = json.loads(dbutils.widgets.get("config") or "{}")
+downgrade_unicode_enabled: bool = config.get("downgrade_unicode", False)
+replace_special_char: list[str] = config.get("replace_special_char", [])
+extra_replace_regex: str = config.get("extra_replace_regex", "")
+skip_row_validation: bool = config.get("skip_row_validation", False)
 
 # Set up client for the backend REST API calls
 client = BackendAPIClient(backend_api_url=backend_api_url)
@@ -242,8 +244,22 @@ try:
     src_df = exclude_cols(src_df, exclude_columns).persist(StorageLevel.MEMORY_AND_DISK)
     tgt_df = exclude_cols(tgt_df, exclude_columns).persist(StorageLevel.MEMORY_AND_DISK)
 
-    # Step 6: Row-level validation (only if counts match)
-    if count_result["row_count_match"]:
+    # Step 6: Row-level validation (only if counts match and not skipped)
+    if skip_row_validation:
+        print("Skipping row validation (skip_row_validation=true)")
+        if count_result["row_count_match"]:
+            result.update({
+                "rows_compared": count_result["row_count_source"],
+                "rows_matched": count_result["row_count_source"],
+                "rows_different": 0,
+                "src_df": src_df,
+                "tgt_df": tgt_df,
+                "sample_df": None,
+                "diff_df": None,
+            })
+        else:
+            result.update({"rows_compared": None, "rows_matched": None, "rows_different": None, "src_df": src_df, "tgt_df": tgt_df, "sample_df": None, "diff_df": None})
+    elif count_result["row_count_match"]:
         # Validate PK columns exist and are unique for primary_key mode
         if compare_mode == "primary_key":
             pk_cols_lower: set[str] = set(c.lower() for c in pk_columns)

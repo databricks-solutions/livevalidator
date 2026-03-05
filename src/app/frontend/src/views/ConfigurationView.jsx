@@ -7,7 +7,8 @@ export function ConfigurationView() {
   const [config, setConfig] = useState({
     downgrade_unicode: false,
     replace_special_char: [],
-    extra_replace_regex: ''
+    extra_replace_regex: '',
+    skip_row_validation: false,
   });
   const [originalConfig, setOriginalConfig] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -140,6 +141,23 @@ export function ConfigurationView() {
             </tr>
           </thead>
           <tbody>
+            {/* Skip Row Validation */}
+            <tr className="border-b border-charcoal-300/30">
+              <td className="px-4 py-4 text-gray-200 font-medium align-top">
+                Skip Row Validation
+              </td>
+              <td className="px-4 py-4 text-gray-400 text-sm">
+                <p>When enabled, validation passes if row counts match without comparing actual row values.</p>
+                <p className="text-xs text-gray-500 mt-1">Useful for large tables where row-level comparison is too expensive.</p>
+              </td>
+              <td className="px-4 py-4 text-center align-top">
+                <Checkbox
+                  checked={config.skip_row_validation}
+                  onChange={(e) => setConfig(prev => ({ ...prev, skip_row_validation: e.target.checked }))}
+                />
+              </td>
+            </tr>
+
             {/* Downgrade Unicode */}
             <tr className="border-b border-charcoal-300/30">
               <td className="px-4 py-4 text-gray-200 font-medium align-top">

@@ -117,18 +117,15 @@ class TriggersService:
 
     async def launch_validation_job(self, trigger_id: int) -> dict:
         """Launch a Databricks validation job for the given trigger."""
+        from backend.services.validation_config_service import ValidationConfigService
+
         enriched = await self.get_enriched_trigger(trigger_id)
         if not enriched:
             raise HTTPException(status_code=404, detail="Trigger or entity not found")
 
-        config_row = await self.db.fetchrow("SELECT * FROM control.validation_config WHERE id = 1")
-        resolved_config = (
-            dict(config_row)
-            if config_row
-            else {"downgrade_unicode": False, "replace_special_char": [], "extra_replace_regex": ""}
-        )
-        if enriched.get("config_overrides"):
-            resolved_config.update(enriched["config_overrides"])
+        config_service = ValidationConfigService(self.db)
+        entity_type = "table" if enriched["entity_type"] == "table" else "compare_query"
+        resolved_config = await config_service.get_effective_config(entity_type, enriched["entity_id"])
 
         is_table = enriched["entity_type"] == "table"
         params = {
@@ -146,9 +143,7 @@ class TriggersService:
             "include_columns": json.dumps(enriched.get("include_columns") or []),
             "exclude_columns": json.dumps(enriched.get("exclude_columns") or []),
             "options": json.dumps(enriched.get("options") or {}),
-            "downgrade_unicode": str(resolved_config.get("downgrade_unicode", False)).lower(),
-            "replace_special_char": json.dumps(resolved_config.get("replace_special_char", [])),
-            "extra_replace_regex": resolved_config.get("extra_replace_regex", ""),
+            "config": json.dumps(resolved_config),
         }
 
         job_id = self.databricks.get_validation_job_id()

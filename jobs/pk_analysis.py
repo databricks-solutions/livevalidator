@@ -8,8 +8,6 @@ import sys
 import os
 sys.path.append(os.path.abspath('.'))
 
-from analysis_utils import summarize_df
-
 def compare_pk_samples(
     src_rows: list[dict],
     tgt_rows: list[dict],
@@ -73,6 +71,10 @@ def run_pk_count_analysis(result: dict) -> dict | None:
         Analysis dict or None if skipped/not applicable
     """
     from pyspark.sql.functions import col  # noqa: PLC0415
+    try:
+        from analysis_utils import summarize_df  # noqa: PLC0415
+    except ImportError:
+        from jobs.analysis_utils import summarize_df  # noqa: PLC0415
     
     pk_columns: list[str] = result.get("pk_columns", [])
     src_df: DataFrame = result.get("src_df")

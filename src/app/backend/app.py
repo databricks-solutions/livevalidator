@@ -66,9 +66,9 @@ async def handle_undefined_table(request: Request, exc: asyncpg.exceptions.Undef
     return JSONResponse(
         status_code=503,
         content={
-            "detail": "Database not initialized",
+            "detail": "Database setup required",
             "action": "setup_required",
-            "message": "Please go to the Setup tab and click 'Initialize Database'",
+            "message": "Database needs initialization or upgrade. Please go to the Setup tab and click 'Initialize Database'.",
         },
     )
 
