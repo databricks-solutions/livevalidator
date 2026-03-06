@@ -10,7 +10,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "downgrade_unicode": False,
     "replace_special_char": [],
     "extra_replace_regex": "",
-    "skip_row_validation": False
+    "skip_row_validation": False,
 }
 
 
@@ -32,9 +32,7 @@ class ValidationConfigService:
 
     async def get_validation_config(self) -> dict[str, Any]:
         """Get global config with defaults applied."""
-        row = await self.db.fetchrow(
-            "SELECT settings FROM control.config WHERE scope='global' AND scope_id IS NULL"
-        )
+        row = await self.db.fetchrow("SELECT settings FROM control.config WHERE scope='global' AND scope_id IS NULL")
         return {**DEFAULT_CONFIG, **_parse_settings(row["settings"] if row else None)}
 
     async def update_validation_config(self, data: dict) -> dict[str, Any]:
