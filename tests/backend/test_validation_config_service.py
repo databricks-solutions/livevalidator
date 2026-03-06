@@ -45,18 +45,7 @@ class TestGetEffectiveConfig:
         mock_db.set_fetchrow_results(
             {"settings": json.dumps({"downgrade_unicode": True})},  # global
             None,  # no control.config override
-            None,  # no deprecated config_overrides
         )
         service = ValidationConfigService(mock_db)
         result = await service.get_effective_config("table", 1)
         assert result["downgrade_unicode"] is True
-
-    async def test_falls_back_to_deprecated_config_overrides(self, mock_db: MockDBSession):
-        mock_db.set_fetchrow_results(
-            {"settings": json.dumps({})},  # global
-            None,  # no control.config override
-            {"config_overrides": {"skip_row_validation": True}},  # deprecated column
-        )
-        service = ValidationConfigService(mock_db)
-        result = await service.get_effective_config("table", 1)
-        assert result["skip_row_validation"] is True

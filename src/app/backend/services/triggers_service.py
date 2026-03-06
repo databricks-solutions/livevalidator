@@ -21,6 +21,11 @@ class TriggersService:
         self.user_email = user_email
         self._databricks = databricks
 
+    @staticmethod
+    def _entity_table(entity_type: str) -> str:
+        """Get DB table name for entity type."""
+        return "datasets" if entity_type == "table" else "compare_queries"
+
     @property
     def databricks(self) -> "DatabricksService":
         if self._databricks is None:
@@ -29,16 +34,80 @@ class TriggersService:
             self._databricks = DatabricksService()
         return self._databricks
 
+    async def _get_trigger_or_404(self, trigger_id: int) -> dict:
+        """Fetch trigger by ID or raise 404."""
+        trigger = await self.db.fetchrow("SELECT * FROM control.triggers WHERE id=$1", trigger_id)
+        if not trigger:
+            raise HTTPException(status_code=404, detail="Trigger not found")
+        return trigger
+
+    async def _get_running_counts(self, system_ids: list[int] | None = None) -> dict[int, int]:
+        """Get count of running validations per system."""
+        query = """
+            WITH running_tables AS (
+                SELECT d.src_system_id, d.tgt_system_id
+                FROM control.triggers t
+                JOIN control.datasets d ON t.entity_id = d.id
+                WHERE t.status = 'running' AND t.entity_type = 'table'
+            ),
+            running_queries AS (
+                SELECT q.src_system_id, q.tgt_system_id
+                FROM control.triggers t
+                JOIN control.compare_queries q ON t.entity_id = q.id
+                WHERE t.status = 'running' AND t.entity_type = 'compare_query'
+            ),
+            all_running AS (
+                SELECT src_system_id as system_id FROM running_tables
+                UNION ALL SELECT tgt_system_id FROM running_tables
+                UNION ALL SELECT src_system_id FROM running_queries
+                UNION ALL SELECT tgt_system_id FROM running_queries
+            )
+            SELECT system_id, COUNT(*) as count FROM all_running
+        """
+        if system_ids:
+            query += " WHERE system_id = ANY($1)"
+            query += " GROUP BY system_id"
+            rows = await self.db.fetch(query, system_ids)
+        else:
+            query += " GROUP BY system_id"
+            rows = await self.db.fetch(query)
+        return {row["system_id"]: int(row["count"]) for row in rows}
+
+    async def _insert_trigger(self, data: dict, status: str) -> dict:
+        """Insert a new trigger with given status."""
+        params_value = (
+            json.dumps(data.get("params", {}))
+            if isinstance(data.get("params"), (dict, list))
+            else data.get("params", "{}")
+        )
+        started_at = "now()" if status == "running" else "NULL"
+        row = await self.db.fetchrow(
+            f"""
+            INSERT INTO control.triggers (
+                source, schedule_id, entity_type, entity_id,
+                priority, requested_by, requested_at, params, status, started_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, now(), $7, $8, {started_at})
+            RETURNING *
+            """,
+            data.get("source", "manual"),
+            data.get("schedule_id"),
+            data["entity_type"],
+            data["entity_id"],
+            data.get("priority", 100),
+            self.user_email,
+            params_value,
+            status,
+        )
+        return row
+
     async def get_enriched_trigger(self, trigger_id: int) -> dict | None:
         """Get trigger with full entity details for job launch."""
         trigger = await self.db.fetchrow("SELECT * FROM control.triggers WHERE id=$1", trigger_id)
         if not trigger:
             return None
 
-        if trigger["entity_type"] == "table":
-            entity = await self.db.fetchrow("SELECT * FROM control.datasets WHERE id=$1", trigger["entity_id"])
-        else:
-            entity = await self.db.fetchrow("SELECT * FROM control.compare_queries WHERE id=$1", trigger["entity_id"])
+        table = self._entity_table(trigger["entity_type"])
+        entity = await self.db.fetchrow(f"SELECT * FROM control.{table} WHERE id=$1", trigger["entity_id"])
 
         if not entity:
             return None
@@ -73,35 +142,7 @@ class TriggersService:
         if src_limit == -1 and tgt_limit == -1:
             return True, ""
 
-        rows = await self.db.fetch(
-            """
-            WITH running_tables AS (
-                SELECT d.src_system_id, d.tgt_system_id
-                FROM control.triggers t
-                JOIN control.datasets d ON t.entity_id = d.id
-                WHERE t.status = 'running' AND t.entity_type = 'table'
-            ),
-            running_queries AS (
-                SELECT q.src_system_id, q.tgt_system_id
-                FROM control.triggers t
-                JOIN control.compare_queries q ON t.entity_id = q.id
-                WHERE t.status = 'running' AND t.entity_type = 'compare_query'
-            ),
-            all_running AS (
-                SELECT src_system_id as system_id FROM running_tables
-                UNION ALL SELECT tgt_system_id FROM running_tables
-                UNION ALL SELECT src_system_id FROM running_queries
-                UNION ALL SELECT tgt_system_id FROM running_queries
-            )
-            SELECT system_id, COUNT(*) as count FROM all_running
-            WHERE system_id IN ($1, $2) GROUP BY system_id
-        """,
-            src_system_id,
-            tgt_system_id,
-        )
-
-        running_counts = {row["system_id"]: int(row["count"]) for row in rows}
-
+        running_counts = await self._get_running_counts([src_system_id, tgt_system_id])
         src_running = running_counts.get(src_system_id, 0)
         tgt_running = running_counts.get(tgt_system_id, 0)
 
@@ -170,54 +211,32 @@ class TriggersService:
 
     async def list_triggers(self, status: str | None = None) -> list[dict]:
         """Get active triggers with optional status filter."""
+        query = """
+            SELECT t.*,
+                   CASE t.entity_type
+                     WHEN 'table' THEN d.name
+                     WHEN 'compare_query' THEN q.name
+                   END as entity_name,
+                   COALESCE(
+                       (SELECT json_agg(tg.name ORDER BY tg.name)
+                        FROM control.entity_tags et
+                        JOIN control.tags tg ON et.tag_id = tg.id
+                        WHERE et.entity_type = CASE t.entity_type
+                            WHEN 'table' THEN 'table'
+                            WHEN 'compare_query' THEN 'query'
+                        END AND et.entity_id = t.entity_id),
+                       '[]'::json
+                   ) as entity_tags
+            FROM control.triggers t
+            LEFT JOIN control.datasets d ON t.entity_type = 'table' AND t.entity_id = d.id
+            LEFT JOIN control.compare_queries q ON t.entity_type = 'compare_query' AND t.entity_id = q.id
+        """
         if status:
-            rows = await self.db.fetch(
-                """
-                SELECT t.*,
-                       CASE t.entity_type
-                         WHEN 'table' THEN d.name
-                         WHEN 'compare_query' THEN q.name
-                       END as entity_name,
-                       COALESCE(
-                           (SELECT json_agg(tg.name ORDER BY tg.name)
-                            FROM control.entity_tags et
-                            JOIN control.tags tg ON et.tag_id = tg.id
-                            WHERE et.entity_type = CASE t.entity_type
-                                WHEN 'table' THEN 'table'
-                                WHEN 'compare_query' THEN 'query'
-                            END AND et.entity_id = t.entity_id),
-                           '[]'::json
-                       ) as entity_tags
-                FROM control.triggers t
-                LEFT JOIN control.datasets d ON t.entity_type = 'table' AND t.entity_id = d.id
-                LEFT JOIN control.compare_queries q ON t.entity_type = 'compare_query' AND t.entity_id = q.id
-                WHERE t.status = $1
-                ORDER BY t.priority ASC, t.id ASC
-            """,
-                status,
-            )
+            query += " WHERE t.status = $1 ORDER BY t.priority ASC, t.id ASC"
+            rows = await self.db.fetch(query, status)
         else:
-            rows = await self.db.fetch("""
-                SELECT t.*,
-                       CASE t.entity_type
-                         WHEN 'table' THEN d.name
-                         WHEN 'compare_query' THEN q.name
-                       END as entity_name,
-                       COALESCE(
-                           (SELECT json_agg(tg.name ORDER BY tg.name)
-                            FROM control.entity_tags et
-                            JOIN control.tags tg ON et.tag_id = tg.id
-                            WHERE et.entity_type = CASE t.entity_type
-                                WHEN 'table' THEN 'table'
-                                WHEN 'compare_query' THEN 'query'
-                            END AND et.entity_id = t.entity_id),
-                           '[]'::json
-                       ) as entity_tags
-                FROM control.triggers t
-                LEFT JOIN control.datasets d ON t.entity_type = 'table' AND t.entity_id = d.id
-                LEFT JOIN control.compare_queries q ON t.entity_type = 'compare_query' AND t.entity_id = q.id
-                ORDER BY t.status, t.priority ASC, t.id ASC
-            """)
+            query += " ORDER BY t.status, t.priority ASC, t.id ASC"
+            rows = await self.db.fetch(query)
 
         running_run_ids = [
             int(r["databricks_run_id"]) for r in rows if r["status"] == "running" and r.get("databricks_run_id")
@@ -236,10 +255,8 @@ class TriggersService:
 
     async def create_trigger(self, data: dict) -> dict:
         """Create a new validation trigger and attempt immediate launch."""
-        if data["entity_type"] == "table":
-            entity = await self.db.fetchrow("SELECT * FROM control.datasets WHERE id=$1", data["entity_id"])
-        else:
-            entity = await self.db.fetchrow("SELECT * FROM control.compare_queries WHERE id=$1", data["entity_id"])
+        table = self._entity_table(data["entity_type"])
+        entity = await self.db.fetchrow(f"SELECT * FROM control.{table} WHERE id=$1", data["entity_id"])
 
         if not entity:
             raise HTTPException(status_code=404, detail=f"{data['entity_type']} not found")
@@ -259,47 +276,12 @@ class TriggersService:
         can_launch, reason = await self.check_system_concurrency(entity["src_system_id"], entity["tgt_system_id"])
 
         if not can_launch:
-            row = await self.db.fetchrow(
-                """
-                INSERT INTO control.triggers (
-                    source, schedule_id, entity_type, entity_id,
-                    priority, requested_by, requested_at, params, status
-                ) VALUES ($1, $2, $3, $4, $5, $6, now(), $7, 'queued')
-                RETURNING *
-            """,
-                data.get("source", "manual"),
-                data.get("schedule_id"),
-                data["entity_type"],
-                data["entity_id"],
-                data.get("priority", 100),
-                self.user_email,
-                json.dumps(data.get("params", {}))
-                if isinstance(data.get("params"), (dict, list))
-                else data.get("params", "{}"),
-            )
+            row = await self._insert_trigger(data, "queued")
             result = serialize_row(row)
             result["queued_reason"] = reason
             return result
 
-        row = await self.db.fetchrow(
-            """
-            INSERT INTO control.triggers (
-                source, schedule_id, entity_type, entity_id,
-                priority, requested_by, requested_at, params, status, started_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, now(), $7, 'running', now())
-            RETURNING *
-        """,
-            data.get("source", "manual"),
-            data.get("schedule_id"),
-            data["entity_type"],
-            data["entity_id"],
-            data.get("priority", 100),
-            self.user_email,
-            json.dumps(data.get("params", {}))
-            if isinstance(data.get("params"), (dict, list))
-            else data.get("params", "{}"),
-        )
-
+        row = await self._insert_trigger(data, "running")
         trigger_id = row["id"]
 
         try:
@@ -398,32 +380,23 @@ class TriggersService:
 
     async def cancel_trigger(self, trigger_id: int) -> dict:
         """Cancel a queued or running trigger."""
-        trigger = await self.db.fetchrow("SELECT * FROM control.triggers WHERE id=$1", trigger_id)
-        if not trigger:
-            raise HTTPException(status_code=404, detail="Trigger not found")
-
+        await self._get_trigger_or_404(trigger_id)
         await self.db.execute("DELETE FROM control.triggers WHERE id=$1", trigger_id)
         return {"ok": True}
 
     async def launch_trigger(self, trigger_id: int) -> dict:
         """Manually launch a trigger."""
-        trigger = await self.db.fetchrow("SELECT * FROM control.triggers WHERE id=$1", trigger_id)
-        if not trigger:
-            raise HTTPException(status_code=404, detail="Trigger not found")
+        trigger = await self._get_trigger_or_404(trigger_id)
 
         if trigger["status"] == "running" and trigger.get("databricks_run_id"):
             return {"launched": False, "reason": "Already running"}
         if trigger["status"] not in ("queued", "running"):
             raise HTTPException(status_code=400, detail=f"Trigger cannot be launched (status: {trigger['status']})")
 
-        if trigger["entity_type"] == "table":
-            entity = await self.db.fetchrow(
-                "SELECT src_system_id, tgt_system_id FROM control.datasets WHERE id=$1", trigger["entity_id"]
-            )
-        else:
-            entity = await self.db.fetchrow(
-                "SELECT src_system_id, tgt_system_id FROM control.compare_queries WHERE id=$1", trigger["entity_id"]
-            )
+        table = self._entity_table(trigger["entity_type"])
+        entity = await self.db.fetchrow(
+            f"SELECT src_system_id, tgt_system_id FROM control.{table} WHERE id=$1", trigger["entity_id"]
+        )
 
         if not entity:
             await self.db.execute("DELETE FROM control.triggers WHERE id=$1", trigger_id)
@@ -459,14 +432,10 @@ class TriggersService:
                 )
                 continue
 
-            if trigger["entity_type"] == "table":
-                entity = await self.db.fetchrow(
-                    "SELECT src_system_id, tgt_system_id FROM control.datasets WHERE id=$1", trigger["entity_id"]
-                )
-            else:
-                entity = await self.db.fetchrow(
-                    "SELECT src_system_id, tgt_system_id FROM control.compare_queries WHERE id=$1", trigger["entity_id"]
-                )
+            table = self._entity_table(trigger["entity_type"])
+            entity = await self.db.fetchrow(
+                f"SELECT src_system_id, tgt_system_id FROM control.{table} WHERE id=$1", trigger["entity_id"]
+            )
 
             if not entity:
                 await self.db.execute("DELETE FROM control.triggers WHERE id=$1", trigger_id)
@@ -490,9 +459,7 @@ class TriggersService:
 
     async def repair_trigger(self, trigger_id: int) -> dict:
         """Repair a failed Databricks run for a trigger."""
-        trigger = await self.db.fetchrow("SELECT * FROM control.triggers WHERE id=$1", trigger_id)
-        if not trigger:
-            raise HTTPException(status_code=404, detail="Trigger not found")
+        trigger = await self._get_trigger_or_404(trigger_id)
 
         if not trigger.get("databricks_run_id"):
             raise HTTPException(status_code=400, detail="No Databricks run associated with this trigger")
@@ -531,35 +498,14 @@ class TriggersService:
     async def bulk_repair_triggers(self, trigger_ids: list[int]) -> dict:
         """Repair multiple failed triggers."""
         results = []
-
         for trigger_id in trigger_ids:
             try:
-                trigger = await self.db.fetchrow("SELECT * FROM control.triggers WHERE id=$1", trigger_id)
-                if not trigger:
-                    results.append({"id": trigger_id, "repaired": False, "reason": "Not found"})
-                    continue
-
-                if not trigger.get("databricks_run_id"):
-                    results.append({"id": trigger_id, "repaired": False, "reason": "No run ID"})
-                    continue
-
-                repair_info = self.databricks.repair_run(int(trigger["databricks_run_id"]))
-                new_run_url = repair_info.get("run_url") or trigger["databricks_run_url"]
-
-                await self.db.execute(
-                    """
-                    UPDATE control.triggers
-                    SET status = 'running', started_at = now(), databricks_run_url = $2
-                    WHERE id = $1
-                """,
-                    trigger_id,
-                    new_run_url,
-                )
-
-                results.append({"id": trigger_id, "repaired": True})
+                result = await self.repair_trigger(trigger_id)
+                results.append({"id": trigger_id, **result})
+            except HTTPException as e:
+                results.append({"id": trigger_id, "repaired": False, "reason": e.detail})
             except Exception as e:
                 results.append({"id": trigger_id, "repaired": False, "reason": str(e)})
-
         return {"results": results}
 
     async def get_queue_status(self) -> dict:
@@ -588,30 +534,7 @@ class TriggersService:
 
     async def get_running_per_system(self) -> dict[int, int]:
         """Get count of running validations per system."""
-        rows = await self.db.fetch("""
-            WITH running_tables AS (
-                SELECT t.id, d.src_system_id, d.tgt_system_id
-                FROM control.triggers t
-                JOIN control.datasets d ON t.entity_id = d.id
-                WHERE t.status = 'running' AND t.entity_type = 'table'
-            ),
-            running_queries AS (
-                SELECT t.id, q.src_system_id, q.tgt_system_id
-                FROM control.triggers t
-                JOIN control.compare_queries q ON t.entity_id = q.id
-                WHERE t.status = 'running' AND t.entity_type = 'compare_query'
-            ),
-            all_running AS (
-                SELECT src_system_id as system_id FROM running_tables
-                UNION ALL SELECT tgt_system_id as system_id FROM running_tables
-                UNION ALL SELECT src_system_id as system_id FROM running_queries
-                UNION ALL SELECT tgt_system_id as system_id FROM running_queries
-            )
-            SELECT system_id, COUNT(*) as count
-            FROM all_running GROUP BY system_id
-        """)
-
-        return {row["system_id"]: int(row["count"]) for row in rows}
+        return await self._get_running_counts()
 
     async def get_next_trigger(self, worker_id: str) -> dict | None:
         """Worker polls this to get next trigger to execute."""
@@ -638,10 +561,8 @@ class TriggersService:
             if not row:
                 return None
 
-            if row["entity_type"] == "table":
-                entity = await self.db.fetchrow("SELECT * FROM control.datasets WHERE id=$1", row["entity_id"])
-            else:
-                entity = await self.db.fetchrow("SELECT * FROM control.compare_queries WHERE id=$1", row["entity_id"])
+            table = self._entity_table(row["entity_type"])
+            entity = await self.db.fetchrow(f"SELECT * FROM control.{table} WHERE id=$1", row["entity_id"])
 
             if not entity:
                 await self.db.execute("DELETE FROM control.triggers WHERE id=$1", row["id"])
@@ -694,9 +615,7 @@ class TriggersService:
 
     async def fail_trigger(self, trigger_id: int, status: str, error_message: str, error_details: dict | None) -> dict:
         """Worker calls this if it fails to launch the job."""
-        trigger = await self.db.fetchrow("SELECT * FROM control.triggers WHERE id=$1", trigger_id)
-        if not trigger:
-            raise HTTPException(status_code=404, detail="Trigger not found")
+        await self._get_trigger_or_404(trigger_id)
 
         await self.db.execute(
             """

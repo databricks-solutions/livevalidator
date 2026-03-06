@@ -65,17 +65,4 @@ class ValidationConfigService:
         if override:
             return {**global_cfg, **_parse_settings(override["settings"])}
 
-        # Fallback: check deprecated config_overrides column for backward compat
-        if entity_type == "table":
-            entity = await self.db.fetchrow(
-                "SELECT config_overrides FROM control.datasets WHERE id=$1", entity_id
-            )
-        else:
-            entity = await self.db.fetchrow(
-                "SELECT config_overrides FROM control.compare_queries WHERE id=$1", entity_id
-            )
-
-        if entity and entity.get("config_overrides"):
-            return {**global_cfg, **_parse_settings(entity["config_overrides"])}
-
         return global_cfg
