@@ -115,7 +115,8 @@ export default function App() {
   const triggers = useFetch(`/api/triggers`, []);
   const queueStats = useFetch(`/api/queue-status`, {});
   const dashboards = useFetch(`/api/dashboards`, []);
-  
+  const globalConfig = useFetch(`/api/validation-config`, {});
+
   useEffect(() => {
     if (view === 'queue') {
       triggers.refresh();
@@ -129,7 +130,7 @@ export default function App() {
   }, [view]);
   
   // Check if database needs initialization
-  const setupRequired = [tbl.error, qs.error, sc.error, sys.error, dashboards.error].some(
+  const setupRequired = [tbl.error, qs.error, sc.error, sys.error, dashboards.error, globalConfig.error].some(
     err => err?.action === "setup_required"
   );
   

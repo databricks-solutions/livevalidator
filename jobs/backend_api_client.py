@@ -5,6 +5,7 @@ import requests
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Any
+import base64
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.runtime import dbutils
 from pyspark.sql import SparkSession
@@ -35,6 +36,8 @@ class BackendAPIClient:
                 return float(val)
             case _ if hasattr(val, "item"):  # numpy scalar
                 return val.item()
+            case bytes() | bytearray():
+                return base64.b64encode(val).decode("ascii")
             case _:
                 return val
 

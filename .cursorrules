@@ -1,0 +1,22 @@
+# LiveValidator Project Rules
+
+## After Code Changes
+
+After modifying any Python code, run the following checks:
+
+1. **Ruff linter**: `ruff check .`
+2. **Pytest suite**: `pytest`
+
+After modifying any frontend code (`src/app/frontend/`), rebuild:
+
+3. **Rebuild frontend**: `cd src/app/frontend && npm run build`
+
+Fix any linter errors, test failures, or build errors before considering the task complete.
+
+## Running Locally
+
+Start the local development server:
+
+```bash
+source venv/bin/activate && cd src/app && uvicorn backend.app:app --reload --port 8000
+```
