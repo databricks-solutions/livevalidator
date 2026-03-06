@@ -10,8 +10,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "downgrade_unicode": False,
     "replace_special_char": [],
     "extra_replace_regex": "",
-    "skip_row_validation": False,
-    "max_sample_rows": 100,
+    "skip_row_validation": False
 }
 
 
