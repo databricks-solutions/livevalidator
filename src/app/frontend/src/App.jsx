@@ -466,9 +466,9 @@ export default function App() {
           <div className="my-4 p-4 bg-rust border-l-4 border-rust-light rounded-md shadow-lg">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-gray-100 mb-1">⚠️ Database Not Initialized</h3>
+                <h3 className="text-lg font-semibold text-gray-100 mb-1">⚠️ Database Not Initialized or Update Required</h3>
                 <p className="text-gray-200">
-                  The database tables have not been created yet. Please go to the Setup tab and click "Initialize Database".
+                  Some or all database tables have not been created yet. Please go to the Setup tab and click "Initialize Database" to create any missing tables.
                 </p>
               </div>
               <button 

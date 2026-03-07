@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from backend.dependencies import DBSession, get_current_user_email, get_db
 from backend.models import BulkQueryRequest, QueryIn, QueryUpdate
-from backend.services.queries_service import QueriesService
+from backend.services.entity_service import EntityService
 from backend.services.users_service import UsersService
 
 router = APIRouter(prefix="/queries", tags=["queries"])
@@ -15,8 +15,8 @@ async def list_queries(
     q: str | None = None,
     db: DBSession = Depends(get_db),
 ):
-    service = QueriesService(db, "")
-    return await service.list_queries(q)
+    service = EntityService(db, "", "query")
+    return await service.list(q)
 
 
 @router.post("")
@@ -28,8 +28,8 @@ async def create_query(
     users = UsersService(db)
     await users.require_role(user_email, "CAN_RUN", "CAN_EDIT", "CAN_MANAGE")
 
-    service = QueriesService(db, user_email)
-    return await service.create_query(body.model_dump())
+    service = EntityService(db, user_email, "query")
+    return await service.create(body.model_dump())
 
 
 @router.get("/{id}")
@@ -37,8 +37,8 @@ async def get_query(
     id: int,
     db: DBSession = Depends(get_db),
 ):
-    service = QueriesService(db, "")
-    return await service.get_query(id)
+    service = EntityService(db, "", "query")
+    return await service.get(id)
 
 
 @router.put("/{id}")
@@ -52,8 +52,8 @@ async def update_query(
     if not await users.can_edit_object(user_email, "queries", id):
         raise HTTPException(403, "You don't have permission to edit this query")
 
-    service = QueriesService(db, user_email)
-    return await service.update_query(id, body.model_dump(exclude_unset=True))
+    service = EntityService(db, user_email, "query")
+    return await service.update(id, body.model_dump(exclude_unset=True))
 
 
 @router.delete("/{id}")
@@ -66,8 +66,8 @@ async def delete_query(
     if not await users.can_edit_object(user_email, "queries", id):
         raise HTTPException(403, "You don't have permission to delete this query")
 
-    service = QueriesService(db, user_email)
-    return await service.delete_query(id)
+    service = EntityService(db, user_email, "query")
+    return await service.delete(id)
 
 
 @router.post("/bulk")
@@ -79,9 +79,9 @@ async def bulk_create_queries(
     users = UsersService(db)
     await users.require_role(user_email, "CAN_RUN", "CAN_EDIT", "CAN_MANAGE")
 
-    service = QueriesService(db, user_email)
+    service = EntityService(db, user_email, "query")
     items = [item.model_dump() for item in body.items]
-    return await service.bulk_create_queries(body.src_system_id, body.tgt_system_id, items)
+    return await service.bulk_create(body.src_system_id, body.tgt_system_id, items)
 
 
 @router.post("/{id}/fetch-lineage")
@@ -98,5 +98,5 @@ async def update_query_lineage(
     body: dict,
     db: DBSession = Depends(get_db),
 ):
-    service = QueriesService(db, "")
+    service = EntityService(db, "", "query")
     return await service.update_lineage(id, body.get("lineage"))

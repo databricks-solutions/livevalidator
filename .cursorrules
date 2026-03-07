@@ -2,10 +2,11 @@
 
 ## After Code Changes
 
-After modifying any Python code, run the following checks:
+After modifying any Python code in `src/app/backend/`, run the following checks (matches CI):
 
-1. **Ruff linter**: `ruff check .`
-2. **Pytest suite**: `pytest`
+1. **Ruff linter**: `ruff check src/app/backend`
+2. **Ruff formatter**: `ruff format src/app/backend`
+3. **Pytest suite**: `pytest`
 
 After modifying any frontend code (`src/app/frontend/`), rebuild:
 
