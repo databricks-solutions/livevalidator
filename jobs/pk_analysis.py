@@ -174,12 +174,8 @@ def run_pk_analysis(result: dict) -> dict | None:
     # Collect from Spark DataFrames
     src_rows: list[dict] = [r.asDict() for r in null_safe_join(src_df, broadcast(sample_df), pk_columns).collect()]
     tgt_rows: list[dict] = [r.asDict() for r in null_safe_join(tgt_df, broadcast(sample_df), pk_columns).collect()]
-    pk_columns_lower = [p.lower() for p in pk_columns]
-    src_rows = [{k.lower(): v for k, v in r.items()} for r in src_rows]
-    tgt_rows = [{k.lower(): v for k, v in r.items()} for r in tgt_rows]
 
-    # Pure Python comparison
-    mismatch_samples = compare_pk_samples(src_rows, tgt_rows, pk_columns_lower, source_system_name, target_system_name)
+    mismatch_samples = compare_pk_samples(src_rows, tgt_rows, pk_columns, source_system_name, target_system_name)
     
     if mismatch_samples is None:
         print("Found inconsistencies when matching primary keys. One or more PKs may be invalid.")
@@ -194,6 +190,6 @@ def run_pk_analysis(result: dict) -> dict | None:
 
     return {
         "mode": "primary_key",
-        "pk_columns": pk_columns_lower,
+        "pk_columns": pk_columns,
         "samples": mismatch_samples
     }

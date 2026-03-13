@@ -14,11 +14,11 @@ def summarize_df(df: DataFrame, pk_columns: list[str]) -> list[dict]:
     """
     from pyspark.sql.functions import col, min as spark_min, max as spark_max, countDistinct, sum as spark_sum, when  # noqa: PLC0415
     
-    pk_set: set[str] = {pk.lower() for pk in pk_columns}
+    pk_set: set[str] = set(pk_columns)
     stats: list[dict] = []
     for field in df.schema.fields:
         name, dtype = field.name, str(field.dataType)
-        is_pk = name.lower() in pk_set
+        is_pk = name in pk_set
         
         null_expr = spark_sum(when(col(name).isNull(), 1).otherwise(0))
         
