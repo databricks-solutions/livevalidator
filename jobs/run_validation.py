@@ -56,10 +56,15 @@ target_table: str | None = dbutils.widgets.get("target_table") or None
 sql: str | None = dbutils.widgets.get("sql") or None
 watermark_expr: str | None = dbutils.widgets.get("watermark_expr") or None
 compare_mode: str = dbutils.widgets.get("compare_mode")
-pk_columns: list[str] = [c for c in json.loads(dbutils.widgets.get("pk_columns") or "[]") if c]
-include_columns: list[str] = [c for c in json.loads(dbutils.widgets.get("include_columns") or "[]") if c]
-exclude_columns: list[str] = [c for c in json.loads(dbutils.widgets.get("exclude_columns") or "[]") if c]
+pk_columns: list[str] = json.loads(dbutils.widgets.get("pk_columns") or "[]")
+include_columns: list[str] = json.loads(dbutils.widgets.get("include_columns") or "[]")
+exclude_columns: list[str] = json.loads(dbutils.widgets.get("exclude_columns") or "[]")
 options: dict = json.loads(dbutils.widgets.get("options") or "{}")
+
+# sanitize column names
+pk_columns = [c.lower() for c in pk_columns if c]
+include_columns = [c.lower() for c in include_columns if c]
+exclude_columns = [c.lower() for c in exclude_columns if c]
 
 # Parse unified config
 config: dict = json.loads(dbutils.widgets.get("config") or "{}")
@@ -251,10 +256,8 @@ try:
     if count_result["row_count_match"] and not skip_row_validation:
         # Validate PK columns exist and are unique for primary_key mode
         if compare_mode == "primary_key":
-            pk_cols_lower: set[str] = set(c.lower() for c in pk_columns)
-            src_cols_lower: set[str] = set(c.lower() for c in src_df.columns)
-            if not pk_cols_lower.issubset(src_cols_lower):
-                raise ValueError(f"PK columns {pk_columns} not found in source columns {src_df.columns}")
+            if not set(pk_columns).issubset(set(src_df.columns)):
+                raise ValueError(f"PK columns {pk_columns} not found in source columns {list(src_df.columns)}")
 
             duplicate_pk: list[Row] = tgt_df.groupBy(*pk_columns).count().filter(col("count") > 1).limit(1).collect()
             if duplicate_pk:

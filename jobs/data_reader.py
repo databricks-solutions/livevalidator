@@ -173,5 +173,7 @@ def read_data(
 
     if conn["type"] == "jdbc":
         return query_jdbc(conn, read_query)
+
+    df: DataFrame = spark.sql(read_query)
     
-    return spark.sql(read_query)
+    return df.toDF(*[c.lower() for c in df.columns])
