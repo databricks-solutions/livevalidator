@@ -91,6 +91,27 @@ When differences are found, LiveValidator captures sample records and provides d
 
 ---
 
+#### Prerequisites: Install/Update Databricks CLI
+
+Ensure you have Databricks CLI version 0.281 or above:
+
+```bash
+databricks -v
+```
+
+**macOS/Linux (Homebrew):**
+```bash
+brew tap databricks/tap
+brew install databricks   # or: brew upgrade databricks
+```
+
+**Windows (WinGet):**
+```bash
+winget install Databricks.DatabricksCLI   # or: winget upgrade Databricks.DatabricksCLI
+```
+
+See [Databricks CLI installation docs](https://docs.databricks.com/aws/en/dev-tools/cli/install) for other methods.
+
 #### Step 1: Configure Your Environment
 
 ```bash
