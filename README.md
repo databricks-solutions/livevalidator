@@ -81,36 +81,13 @@ When differences are found, LiveValidator captures sample records and provides d
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Clone this repository: `git clone https://github.com/databricks-field-eng/livevalidator`
-- Databricks CLI installed and configured
+- Clone this repository: `git clone https://github.com/databricks-solutions/livevalidator`
+- [Databricks CLI](https://docs.databricks.com/aws/en/dev-tools/cli/install) v0.281+ installed/updated and configured
 - Lakehouse Apps enabled on your workspace
 - Lakebase enabled on your workspace
 - Elevated/admin privileges for the deployer
 
 ### Setup
-
----
-
-#### Prerequisites: Install/Update Databricks CLI
-
-Ensure you have Databricks CLI version 0.281 or above:
-
-```bash
-databricks -v
-```
-
-**macOS/Linux (Homebrew):**
-```bash
-brew tap databricks/tap
-brew install databricks   # or: brew upgrade databricks
-```
-
-**Windows (WinGet):**
-```bash
-winget install Databricks.DatabricksCLI   # or: winget upgrade Databricks.DatabricksCLI
-```
-
-See [Databricks CLI installation docs](https://docs.databricks.com/aws/en/dev-tools/cli/install) for other methods.
 
 #### Step 1: Configure Your Environment
 
