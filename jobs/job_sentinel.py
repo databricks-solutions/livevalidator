@@ -151,8 +151,8 @@ def can_launch_job(src_system_id: int, tgt_system_id: int, running_per_system: d
         # Check if any system exceeds its limit
         effective_limit: int = min(limits)
         max_running: int = max(
-            running_per_system.get(src_system_id, 0),
-            running_per_system.get(tgt_system_id, 0)
+            running_per_system.get(str(src_system_id), 0),
+            running_per_system.get(str(tgt_system_id), 0)
         )
 
         if max_running >= effective_limit:
