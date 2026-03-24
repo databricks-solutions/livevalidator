@@ -128,6 +128,9 @@ def read_count(
     is_databricks: bool = conn["system"]["kind"] == "Databricks"
 
     if query:
+        if is_databricks:
+            if conn["type"] == "catalog":
+                spark.sql(f"USE CATALOG `{conn['catalog']}`;")
         count_query = f"SELECT COUNT(*) as cnt FROM ({query.replace(';','')}) _subq"
     else:
         tbl = f"`{conn['catalog']}`.{table}" if is_databricks else table
