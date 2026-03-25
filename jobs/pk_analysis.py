@@ -6,7 +6,8 @@ if TYPE_CHECKING:
 
 import sys
 import os
-sys.path.append(os.path.abspath('.'))
+_jobs_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.path.abspath('.')
+sys.path.insert(0, _jobs_dir)
 
 def compare_pk_samples(
     src_rows: list[dict],
