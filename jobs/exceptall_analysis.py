@@ -4,7 +4,8 @@ from pyspark.sql import DataFrame
 
 import sys
 import os
-sys.path.append(os.path.abspath('.'))
+_jobs_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.path.abspath('.')
+sys.path.insert(0, _jobs_dir)
 
 from analysis_utils import summarize_df, compare_summaries
 

@@ -6,7 +6,9 @@ from databricks.sdk.runtime import dbutils
 import json
 import sys
 import os
-sys.path.append(os.path.abspath('.'))
+_jobs_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.path.abspath('.')
+sys.path.insert(0, _jobs_dir)
+
 from backend_api_client import BackendAPIClient
 from teradata_columns import teradata_columns
 

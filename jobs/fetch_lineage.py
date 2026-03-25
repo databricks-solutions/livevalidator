@@ -17,6 +17,8 @@ import json
 import requests
 from databricks.sdk.runtime import dbutils
 from pyspark.sql import SparkSession
+_nb_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+sys.path.insert(0, "/Workspace" + os.path.dirname(_nb_path))
 
 # --- Input parameters (passed as Databricks job widgets) ---
 # table_name:       the root table to fetch lineage for, e.g. "prod.finance.revenue_summary"

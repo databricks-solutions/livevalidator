@@ -20,7 +20,8 @@ import traceback
 
 import sys
 import os
-sys.path.append(os.path.abspath('.'))
+_nb_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+sys.path.insert(0, "/Workspace" + os.path.dirname(_nb_path))
 
 from backend_api_client import BackendAPIClient
 
