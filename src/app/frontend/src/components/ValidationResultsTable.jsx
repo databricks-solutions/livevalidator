@@ -45,6 +45,9 @@ function ErrorPopover({ error, onClose }) {
 const formatRowCountDiff = (source, target) => {
   if (!source || source === 0) return null;
   const pct = ((target - source) / source) * 100;
+  const absPct = Math.abs(pct);
+  if (absPct < 0.1) return pct >= 0 ? '<+0.1%' : '<-0.1%';
+  if (absPct > 1000) return pct >= 0 ? '>+1000%' : '<-1000%';
   const sign = pct >= 0 ? '+' : '';
   return `${sign}${pct.toFixed(1)}%`;
 };
