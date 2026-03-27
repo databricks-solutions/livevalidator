@@ -268,16 +268,21 @@ export function ValidationResultsTable({
                 <td className="px-2 py-1.5 text-sm whitespace-nowrap">
                   {v.status === 'error' || v.row_count_source == null ? (
                     <span className="text-gray-500">-</span>
-                  ) : v.row_count_match ? (
+                  ) : v.row_count_source === v.row_count_target ? (
                     <span className="text-green-400">✓ {v.row_count_source?.toLocaleString()}</span>
                   ) : loadingSampleId === v.id ? (
                     <span className="text-gray-400 text-xs">Loading...</span>
                   ) : (
                     <button
                       onClick={() => onViewSample?.(v)}
-                      className="text-red-400 hover:text-red-300 underline decoration-dotted cursor-pointer transition-colors"
+                      className={`underline decoration-dotted cursor-pointer transition-colors ${
+                        v.row_count_match 
+                          ? 'text-green-400 hover:text-green-300' 
+                          : 'text-red-400 hover:text-red-300'
+                      }`}
                       title="Click to view row count analysis"
                     >
+                      {v.row_count_match && '✓ '}
                       {v.row_count_source?.toLocaleString()} ≠ {v.row_count_target?.toLocaleString()}
                       {formatRowCountDiff(v.row_count_source, v.row_count_target) && (
                         <span className="ml-1">
@@ -290,20 +295,23 @@ export function ValidationResultsTable({
                 <td className="px-2 py-1.5 text-sm whitespace-nowrap">
                   {v.rows_different == null ? (
                     <span className="text-gray-500">-</span>
-                  ) : v.rows_different > 0 ? (
-                    loadingSampleId === v.id ? (
-                      <span className="text-gray-400 text-xs">Loading...</span>
-                    ) : (
-                      <button
-                        onClick={() => onViewSample?.(v)}
-                        className="text-red-400 font-medium hover:text-red-300 underline decoration-dotted cursor-pointer transition-colors"
-                        title="Click to view sample differences"
-                      >
-                        {v.rows_different.toLocaleString()} ({v.difference_pct}%)
-                      </button>
-                    )
-                  ) : (
+                  ) : v.rows_different === 0 ? (
                     <span className="text-green-400">0</span>
+                  ) : loadingSampleId === v.id ? (
+                    <span className="text-gray-400 text-xs">Loading...</span>
+                  ) : (
+                    <button
+                      onClick={() => onViewSample?.(v)}
+                      className={`font-medium underline decoration-dotted cursor-pointer transition-colors ${
+                        v.status === 'succeeded' 
+                          ? 'text-green-400 hover:text-green-300' 
+                          : 'text-red-400 hover:text-red-300'
+                      }`}
+                      title="Click to view sample differences"
+                    >
+                      {v.status === 'succeeded' && '✓ '}
+                      {v.rows_different.toLocaleString()} ({v.difference_pct}%)
+                    </button>
                   )}
                 </td>
                 <td className="px-2 py-1.5 text-sm whitespace-nowrap">

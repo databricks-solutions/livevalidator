@@ -9,6 +9,55 @@ const parseOverrides = (val) => {
   return val;
 };
 
+const toJsonString = (val) => JSON.stringify(val);
+
+// Separate component to manage local input state
+function OverrideRow({ keyName, value, globalValue, isKnownKey, onChangeValue, onRemove }) {
+  const [inputStr, setInputStr] = useState(toJsonString(value));
+  
+  useEffect(() => {
+    setInputStr(toJsonString(value));
+  }, [value]);
+
+  const handleBlur = () => {
+    try {
+      const parsed = JSON.parse(inputStr);
+      onChangeValue(inputStr);
+    } catch {
+      onChangeValue(inputStr);
+    }
+  };
+
+  return (
+    <div className="flex gap-2 items-center">
+      <div className="w-48 flex-shrink-0">
+        <div className="px-2 py-1 rounded-md border border-charcoal-200 bg-charcoal-600 text-gray-300 text-sm font-mono truncate" title={keyName}>
+          {keyName}
+        </div>
+      </div>
+      <input
+        value={inputStr}
+        onChange={(e) => setInputStr(e.target.value)}
+        onBlur={handleBlur}
+        placeholder="value"
+        className="flex-1 px-2 py-1 rounded-md border border-charcoal-200 bg-charcoal-400 text-gray-100 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
+      />
+      <button
+        type="button"
+        onClick={onRemove}
+        className="px-2 py-1 text-red-400 hover:text-red-300 text-sm flex-shrink-0"
+      >
+        ✕
+      </button>
+      {isKnownKey && (
+        <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">
+          global: {toJsonString(globalValue)}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function ConfigOverrides({ value, onChange }) {
   const [globalConfig, setGlobalConfig] = useState(null);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -23,8 +72,6 @@ export function ConfigOverrides({ value, onChange }) {
   }, []);
 
   const overrides = parseOverrides(value);
-
-  const toJsonString = (val) => JSON.stringify(val);
 
   const parseJsonValue = (str) => {
     try {
@@ -78,38 +125,17 @@ export function ConfigOverrides({ value, onChange }) {
 
   return (
     <div className="space-y-2">
-      {Object.entries(overrides).map(([key, val], idx) => {
-        const isKnownKey = globalKeys.includes(key);
-        const globalValue = globalConfig[key];
-        
-        return (
-          <div key={idx} className="flex gap-2 items-center">
-            <div className="w-48 flex-shrink-0">
-              <div className="px-2 py-1 rounded-md border border-charcoal-200 bg-charcoal-600 text-gray-300 text-sm font-mono truncate" title={key}>
-                {key}
-              </div>
-            </div>
-            <input
-              value={toJsonString(val)}
-              onChange={(e) => updateValue(key, e.target.value)}
-              placeholder="value"
-              className="flex-1 px-2 py-1 rounded-md border border-charcoal-200 bg-charcoal-400 text-gray-100 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
-            <button
-              type="button"
-              onClick={() => removeOverride(key)}
-              className="px-2 py-1 text-red-400 hover:text-red-300 text-sm flex-shrink-0"
-            >
-              ✕
-            </button>
-            {isKnownKey && (
-              <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">
-                global: {toJsonString(globalValue)}
-              </span>
-            )}
-          </div>
-        );
-      })}
+      {Object.entries(overrides).map(([key, val], idx) => (
+        <OverrideRow
+          key={idx}
+          keyName={key}
+          value={val}
+          globalValue={globalConfig[key]}
+          isKnownKey={globalKeys.includes(key)}
+          onChangeValue={(newVal) => updateValue(key, newVal)}
+          onRemove={() => removeOverride(key)}
+        />
+      ))}
       
       {showCustomInput && (
         <div className="flex gap-2 items-center">

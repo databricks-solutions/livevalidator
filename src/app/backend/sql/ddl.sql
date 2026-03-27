@@ -379,20 +379,6 @@ INSERT INTO control.config (scope, scope_id, settings, updated_by)
 VALUES ('global', NULL, '{}'::jsonb, 'system')
 ON CONFLICT (scope, COALESCE(scope_id, -1)) DO NOTHING;
 
--- Migrate entity-level config_overrides to control.config (datasets)
-INSERT INTO control.config (scope, scope_id, settings, updated_by, updated_at)
-SELECT 'table', id, config_overrides, updated_by, updated_at
-FROM control.datasets 
-WHERE config_overrides IS NOT NULL AND config_overrides != '{}'::jsonb
-ON CONFLICT (scope, COALESCE(scope_id, -1)) DO NOTHING;
-
--- Migrate entity-level config_overrides to control.config (compare_queries)
-INSERT INTO control.config (scope, scope_id, settings, updated_by, updated_at)
-SELECT 'compare_query', id, config_overrides, updated_by, updated_at
-FROM control.compare_queries 
-WHERE config_overrides IS NOT NULL AND config_overrides != '{}'::jsonb
-ON CONFLICT (scope, COALESCE(scope_id, -1)) DO NOTHING;
-
 -- 3) Add pk_vetted column to datasets and compare_queries
 ALTER TABLE control.datasets ADD COLUMN IF NOT EXISTS pk_vetted BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE control.compare_queries ADD COLUMN IF NOT EXISTS pk_vetted BOOLEAN NOT NULL DEFAULT FALSE;
