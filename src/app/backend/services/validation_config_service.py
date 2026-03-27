@@ -11,6 +11,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "replace_special_char": [],
     "extra_replace_regex": "",
     "skip_row_validation": False,
+    "max_sample_rows": 10,
+    "row_count_tolerance": 0,
+    "row_value_tolerance": 0,
 }
 
 
