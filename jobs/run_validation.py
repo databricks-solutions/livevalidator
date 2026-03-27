@@ -69,10 +69,13 @@ exclude_columns = [c.lower() for c in exclude_columns if c]
 
 # Parse unified config
 config: dict = json.loads(dbutils.widgets.get("config") or "{}")
+skip_row_validation: bool = config.get("skip_row_validation", False)
+max_sample_rows: int = config.get("max_sample_rows", 10)
+row_count_tolerance: float = config.get("row_count_tolerance", 0)
+row_value_tolerance: float = config.get("row_value_tolerance", 0)
 downgrade_unicode_enabled: bool = config.get("downgrade_unicode", False)
 replace_special_char: list[str] = config.get("replace_special_char", [])
 extra_replace_regex: str = config.get("extra_replace_regex", "")
-skip_row_validation: bool = config.get("skip_row_validation", False)
 
 # Set up client for the backend REST API calls
 client = BackendAPIClient(backend_api_url=backend_api_url)
@@ -102,17 +105,24 @@ def validate_schema(src_df: DataFrame, tgt_df: DataFrame, exclude: list[str]) ->
 def validate_counts(
     src_conn: dict, tgt_conn: dict,
     src_table: str | None, tgt_table: str | None,
-    query: str | None, watermark: str | None
+    query: str | None, watermark: str | None,
+    row_count_tolerance: float
 ) -> dict[str, int | bool]:
     """Compare row counts using pushed-down COUNT(*)"""
     src_count: int = read_count(src_conn, src_table, query, watermark)
     tgt_count: int = read_count(tgt_conn, tgt_table, query, watermark)
-    match: bool = src_count == tgt_count
+    match: bool = (
+        abs(src_count - tgt_count) / src_count <= row_count_tolerance / 100 
+        if (row_count_tolerance and src_count)
+        else src_count == tgt_count
+        )
     
     print(f"\tRow counts {'match' if match else 'do not match'}: source={src_count}, target={tgt_count}")
+    if src_count != tgt_count and match:
+        print(f"\tWithin tolerance: {row_count_tolerance}%, was {abs(src_count - tgt_count) / src_count * 100:.5f}%")
     
     return {
-        "rows_compared": src_count, # if match else 0,
+        "rows_compared": src_count,
         "row_count_source": src_count,
         "row_count_target": tgt_count,
         "row_count_match": match
@@ -148,7 +158,7 @@ def run_pk_compare(src_df: DataFrame, tgt_df: DataFrame, pk: list[str], how: str
         (col("h_lhs") != col("h_rhs")) | col("h_lhs").isNull() | col("h_rhs").isNull()
     ).drop("h_lhs", "h_rhs", "__hash__")
 
-def validate_rows(src_df: DataFrame, tgt_df: DataFrame, mode: str, row_count_match: bool) -> dict:
+def validate_rows(src_df: DataFrame, tgt_df: DataFrame, mode: str, row_count_match: bool, max_sample_rows: int) -> dict:
     """Row-level validation - returns diff count and samples"""
 
     # ensure columns are ordered consistently for validation
@@ -173,7 +183,7 @@ def validate_rows(src_df: DataFrame, tgt_df: DataFrame, mode: str, row_count_mat
             return {"rows_different": 0, "sample_differences": []}
     
     print(f"Found {diff_count} differences, extracting sample")
-    sample_df: DataFrame = diff_df.limit(10)
+    sample_df: DataFrame = diff_df.limit(max_sample_rows)
     
     sample_dicts: list[dict] = [row.asDict() for row in sample_df.collect()]
     
@@ -237,7 +247,13 @@ try:
     
     # Step 4: Validate counts
     print("Validating counts...")
-    count_result: dict[str, int | bool] = validate_counts(src_conn, tgt_conn, source_table, target_table, sql, watermark_expr)
+    count_result: dict[str, int | bool] = validate_counts(
+        src_conn, tgt_conn, 
+        source_table, target_table, 
+        sql, 
+        watermark_expr, 
+        row_count_tolerance
+        )
     result.update(count_result)
 
     # Step 5: Apply max_rows limit if configured
@@ -266,14 +282,18 @@ try:
                 raise ValueError(f"PK not unique: {duplicate_pk[0].asDict()}")
         
         print(f"Validating rows using {compare_mode}...")
-        row_result: dict = validate_rows(src_df, tgt_df, compare_mode, count_result["row_count_match"])
+        row_result: dict = validate_rows(src_df, tgt_df, compare_mode, count_result["row_count_match"], max_sample_rows)
         result.update(row_result)
         result["rows_matched"] = max(result["rows_compared"] - result["rows_different"], 0)
+        perc_diff = abs(result["rows_compared"] - result["rows_matched"]) / result["rows_compared"] * 100 if result["rows_compared"] else 0
+        result["rows_success"] = perc_diff <= row_value_tolerance if row_value_tolerance else result["rows_different"] == 0
+        if not result["rows_success"]:
+            print(f"\tPercent difference: {perc_diff:.5f}%")
     else:
-        result.update({"rows_compared": None, "rows_matched": None, "rows_different": None, "src_df": src_df, "tgt_df": tgt_df, "sample_df": None, "diff_df": None})
+        result.update({"rows_compared": None, "rows_matched": None, "rows_different": None, "rows_success": None, "src_df": src_df, "tgt_df": tgt_df, "sample_df": None, "diff_df": None})
 
     # Step 7: Determine final status
-    if (result["rows_different"] == 0 and result["row_count_match"]) or (skip_row_validation and result["row_count_match"]):
+    if (result["rows_success"] and result["row_count_match"]) or (skip_row_validation and result["row_count_match"]):
         print("[SUCCESS] Validation passed")
     else:
         rows_diff: int | None = result.get("rows_different")

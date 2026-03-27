@@ -21,6 +21,7 @@ class TableIn(BaseModel):
     include_columns: list[str] = Field(default_factory=list)
     exclude_columns: list[str] = Field(default_factory=list)
     options: dict = Field(default_factory=dict)
+    config_overrides: dict | None = None
     is_active: bool = True
 
     @field_validator("name", "src_schema", "src_table")
@@ -45,6 +46,7 @@ class TableUpdate(BaseModel):
     include_columns: list[str] | None = None
     exclude_columns: list[str] | None = None
     options: dict | None = None
+    config_overrides: dict | None = None
     is_active: bool | None = None
     version: int
 
@@ -61,9 +63,9 @@ class BulkTableItem(BaseModel):
     watermark_filter: str | None = None
     include_columns: list[str] | None = None
     exclude_columns: list[str] | None = None
+    config_overrides: dict | None = None
     is_active: bool | None = True
     tags: list[str] | None = None
-    # Per-row system override (by name) - if provided, overrides the request-level system IDs
     src_system_name: str | None = None
     tgt_system_name: str | None = None
 
@@ -84,6 +86,7 @@ class QueryIn(BaseModel):
     pk_columns: list[str] | None = None
     watermark_filter: str | None = None
     options: dict = Field(default_factory=dict)
+    config_overrides: dict | None = None
     is_active: bool = True
 
     @field_validator("name", "sql")
@@ -103,6 +106,7 @@ class QueryUpdate(BaseModel):
     pk_columns: list[str] | None = None
     watermark_filter: str | None = None
     options: dict | None = None
+    config_overrides: dict | None = None
     is_active: bool | None = None
     version: int
 
@@ -114,9 +118,9 @@ class BulkQueryItem(BaseModel):
     compare_mode: Literal["except_all", "primary_key", "hash"] | None = "except_all"
     pk_columns: list[str] | None = None
     watermark_filter: str | None = None
+    config_overrides: dict | None = None
     is_active: bool | None = True
     tags: list[str] | None = None
-    # Per-row system override (by name) - if provided, overrides the request-level system IDs
     src_system_name: str | None = None
     tgt_system_name: str | None = None
 

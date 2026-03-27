@@ -11,6 +11,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "replace_special_char": [],
     "extra_replace_regex": "",
     "skip_row_validation": False,
+    "max_sample_rows": 10,
+    "row_count_tolerance": 0,
+    "row_value_tolerance": 0,
 }
 
 
@@ -52,15 +55,13 @@ class ValidationConfigService:
         return await self.get_validation_config()
 
     async def get_effective_config(self, entity_type: str, entity_id: int) -> dict[str, Any]:
-        """Get merged config: defaults -> global -> entity override."""
+        """Get merged config: defaults -> global -> entity override (from entity's config_overrides column)."""
         global_cfg = await self.get_validation_config()
 
-        override = await self.db.fetchrow(
-            "SELECT settings FROM control.config WHERE scope=$1 AND scope_id=$2",
-            entity_type,
-            entity_id,
-        )
-        if override:
-            return {**global_cfg, **_parse_settings(override["settings"])}
+        table = "control.datasets" if entity_type == "table" else "control.compare_queries"
+        row = await self.db.fetchrow(f"SELECT config_overrides FROM {table} WHERE id=$1", entity_id)
+
+        if row and row["config_overrides"]:
+            return {**global_cfg, **_parse_settings(row["config_overrides"])}
 
         return global_cfg

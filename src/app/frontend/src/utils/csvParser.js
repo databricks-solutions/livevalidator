@@ -24,6 +24,22 @@ const parseBool = (val) => {
   return !['false', 'f', '0', 'no', 'n'].includes(v);
 };
 
+// Parse JSON from CSV - returns null if empty/invalid
+// Also fixes smart quotes from apps like Mac Numbers
+const parseJson = (val, errors, field) => {
+  if (!val || !val.trim()) return null;
+  // Replace curly/smart quotes with straight quotes
+  const fixed = val.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
+                   .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'");
+  try {
+    return JSON.parse(fixed);
+  } catch (e) {
+    const preview = val.length > 50 ? val.substring(0, 50) + '...' : val;
+    errors.push(`Invalid JSON in ${field}: "${preview}" (${e.message})`);
+    return null;
+  }
+};
+
 /**
  * Validate CSV data based on type
  */
@@ -53,6 +69,8 @@ function validateCSVData(data, type, schedules, systems) {
         rowErrors.push(`Target system '${tgtSystemName}' not found`);
       }
       
+      const configOverrides = parseJson(row.config_overrides, rowErrors, 'config_overrides');
+      
       if (rowErrors.length === 0) {
         validRows.push({
           ...row,
@@ -63,6 +81,7 @@ function validateCSVData(data, type, schedules, systems) {
           pk_columns: row.pk_columns ? row.pk_columns.split(',').map(s => s.trim()) : null,
           include_columns: row.include_columns ? row.include_columns.split(',').map(s => s.trim()) : [],
           exclude_columns: row.exclude_columns ? row.exclude_columns.split(',').map(s => s.trim()) : [],
+          config_overrides: configOverrides,
           tags: row.tags ? row.tags.split(',').map(s => s.trim()).filter(s => s) : [],
           schedule_names: scheduleNames,
           src_system_name: srcSystemName,
@@ -86,6 +105,8 @@ function validateCSVData(data, type, schedules, systems) {
         rowErrors.push(`Target system '${tgtSystemName}' not found`);
       }
       
+      const configOverrides = parseJson(row.config_overrides, rowErrors, 'config_overrides');
+      
       if (rowErrors.length === 0) {
         validRows.push({
           ...row,
@@ -94,6 +115,7 @@ function validateCSVData(data, type, schedules, systems) {
           pk_columns: row.pk_columns ? row.pk_columns.split(',').map(s => s.trim()) : null,
           include_columns: row.include_columns ? row.include_columns.split(',').map(s => s.trim()) : [],
           exclude_columns: row.exclude_columns ? row.exclude_columns.split(',').map(s => s.trim()) : [],
+          config_overrides: configOverrides,
           tags: row.tags ? row.tags.split(',').map(s => s.trim()).filter(s => s) : [],
           schedule_names: scheduleNames,
           src_system_name: srcSystemName,

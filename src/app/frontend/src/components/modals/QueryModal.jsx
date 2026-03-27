@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { TagInput } from '../TagInput';
+import { ConfigOverrides } from '../ConfigOverrides';
 
 export function QueryModal({ query, systems, schedules, onSave, onClose }) {
   const [errors, setErrors] = useState([]);
@@ -14,6 +15,7 @@ export function QueryModal({ query, systems, schedules, onSave, onClose }) {
     pk_columns: query?.pk_columns || [],
     watermark_filter: query?.watermark_filter || "",
     exclude_columns: query?.exclude_columns || [],
+    config_overrides: query?.config_overrides || null,
     is_active: query?.is_active ?? true,
     version: query?.version || 0
   }));
@@ -206,7 +208,7 @@ export function QueryModal({ query, systems, schedules, onSave, onClose }) {
           </div>
           
           {/* Schedule Bindings */}
-          <div className="mb-6">
+          <div className="mb-6 pb-6 border-b border-charcoal-200">
             <h4 className="text-rust-light font-semibold mb-3 text-base">Schedule Bindings</h4>
             <div className="max-h-48 overflow-y-auto bg-charcoal-600 rounded-md p-3">
               {schedules.length === 0 ? (
@@ -226,6 +228,16 @@ export function QueryModal({ query, systems, schedules, onSave, onClose }) {
                 ))
               )}
             </div>
+          </div>
+          
+          {/* Config Overrides */}
+          <div className="mb-6">
+            <h4 className="text-rust-light font-semibold mb-1 text-base">Config Overrides</h4>
+            <p className="text-gray-500 text-xs mb-3">Override global validation settings for this query only</p>
+            <ConfigOverrides
+              value={form.config_overrides}
+              onChange={(val) => setForm({...form, config_overrides: val})}
+            />
           </div>
         </div>
         

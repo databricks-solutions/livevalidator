@@ -9,6 +9,9 @@ export function ConfigurationView() {
     replace_special_char: [],
     extra_replace_regex: '',
     skip_row_validation: false,
+    max_sample_rows: 10,
+    row_count_tolerance: 0,
+    row_value_tolerance: 0,
   });
   const [originalConfig, setOriginalConfig] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -155,6 +158,80 @@ export function ConfigurationView() {
                   checked={config.skip_row_validation}
                   onChange={(e) => setConfig(prev => ({ ...prev, skip_row_validation: e.target.checked }))}
                 />
+              </td>
+            </tr>
+
+            {/* Max Sample Rows */}
+            <tr className="border-b border-charcoal-300/30">
+              <td className="px-4 py-4 text-gray-200 font-medium align-top">
+                Max Sample Rows
+              </td>
+              <td className="px-4 py-4 text-gray-400 text-sm">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    value={config.max_sample_rows ?? 10}
+                    onChange={(e) => setConfig(prev => ({ ...prev, max_sample_rows: parseInt(e.target.value) || 10 }))}
+                    min={1}
+                    max={10000}
+                    className="w-28 px-3 py-2 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm font-mono focus:outline-none focus:border-rust-light"
+                  />
+                  <span className="text-gray-500">rows</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">Maximum number of sample difference rows to return in validation results.</p>
+              </td>
+              <td className="px-4 py-4 text-center align-top">
+                <span className="text-gray-500">-</span>
+              </td>
+            </tr>
+
+            {/* Row Count Tolerance */}
+            <tr className="border-b border-charcoal-300/30">
+              <td className="px-4 py-4 text-gray-200 font-medium align-top">
+                Row Count Tolerance
+              </td>
+              <td className="px-4 py-4 text-gray-400 text-sm">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    value={config.row_count_tolerance ?? 0}
+                    onChange={(e) => setConfig(prev => ({ ...prev, row_count_tolerance: parseFloat(e.target.value) || 0 }))}
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    className="w-28 px-3 py-2 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm font-mono focus:outline-none focus:border-rust-light"
+                  />
+                  <span className="text-gray-500">%</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">Allowed percentage difference in row counts for validation to pass. Set to 0 for exact match.</p>
+              </td>
+              <td className="px-4 py-4 text-center align-top">
+                <span className="text-gray-500">-</span>
+              </td>
+            </tr>
+
+            {/* Row Value Tolerance */}
+            <tr className="border-b border-charcoal-300/30">
+              <td className="px-4 py-4 text-gray-200 font-medium align-top">
+                Row Value Tolerance
+              </td>
+              <td className="px-4 py-4 text-gray-400 text-sm">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    value={config.row_value_tolerance ?? 0}
+                    onChange={(e) => setConfig(prev => ({ ...prev, row_value_tolerance: parseFloat(e.target.value) || 0 }))}
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    className="w-28 px-3 py-2 bg-charcoal-600 border border-charcoal-300 rounded text-gray-200 text-sm font-mono focus:outline-none focus:border-rust-light"
+                  />
+                  <span className="text-gray-500">%</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">Allowed percentage of row value mismatches for validation to pass. Set to 0 for exact match.</p>
+              </td>
+              <td className="px-4 py-4 text-center align-top">
+                <span className="text-gray-500">-</span>
               </td>
             </tr>
 

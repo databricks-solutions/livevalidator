@@ -80,14 +80,14 @@ export function UploadCSVModal({ type, systems, schedules, onClose, onUpload }) 
     
     let csv;
     if (type === 'tables') {
-      const headers = ['src_schema','src_table','schedule_name','source','target','name','is_active','compare_mode','pk_columns','watermark_filter','exclude_columns','tags'];
-      const row1 = ['schema_a','table_a',sched,src,tgt,'schema_a.table_a','true','except_all','','','"COL_A,COL_B,COL_C"','"sample_primary,sample_secondary"'];
-      const row2 = ['schema_b','table_b',sched,src,tgt,'schema_b.table_b','true','primary_key','"PK_COL_A,PK_COL_B"',"\"CREATED_AT > CURRENT_DATE - INTERVAL '5' DAY\"",'"COL_X,COL_Y,COL_Z"','sample_primary'];
+      const headers = ['src_schema','src_table','schedule_name','source','target','name','is_active','compare_mode','pk_columns','watermark_filter','exclude_columns','config_overrides','tags'];
+      const row1 = ['schema_a','table_a',sched,src,tgt,'schema_a.table_a','true','except_all','','','"COL_A,COL_B,COL_C"','','"sample_primary,sample_secondary"'];
+      const row2 = ['schema_b','table_b',sched,src,tgt,'schema_b.table_b','true','primary_key','"PK_COL_A,PK_COL_B"',"\"CREATED_AT > CURRENT_DATE - INTERVAL '5' DAY\"",'"COL_X,COL_Y,COL_Z"','"{""skip_row_validation"":true}"','sample_primary'];
       csv = [headers, row1, row2].map(r => r.join(',')).join('\n');
     } else {
-      const headers = ['sql','schedule_name','source','target','name','is_active','compare_mode','pk_columns','tags'];
-      const row1 = ['"SELECT * FROM schema_a.table_a"',sched,src,tgt,'query_a','true','except_all','','"sample_primary,sample_secondary"'];
-      const row2 = ['"SELECT id, name FROM schema_b.table_b WHERE CREATED_AT > CURRENT_DATE - INTERVAL \'5\' DAY"',sched,src,tgt,'query_b','true','primary_key','id','sample_primary'];
+      const headers = ['sql','schedule_name','source','target','name','is_active','compare_mode','pk_columns','config_overrides','tags'];
+      const row1 = ['"SELECT * FROM schema_a.table_a"',sched,src,tgt,'query_a','true','except_all','','','"sample_primary,sample_secondary"'];
+      const row2 = ['"SELECT id, name FROM schema_b.table_b WHERE CREATED_AT > CURRENT_DATE - INTERVAL \'5\' DAY"',sched,src,tgt,'query_b','true','primary_key','id','"{""skip_row_validation"":true}"','sample_primary'];
       csv = [headers, row1, row2].map(r => r.join(',')).join('\n');
     }
     
@@ -165,6 +165,7 @@ export function UploadCSVModal({ type, systems, schedules, onClose, onUpload }) 
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">pk_columns</code> - Comma-separated primary key columns</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">watermark_filter</code> - Optional WHERE clause filter expression</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">exclude_columns</code> - Comma-separated columns to exclude</li>
+                      <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">config_overrides</code> - JSON object for config overrides (e.g., {`{"skip_row_validation":true}`})</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">tags</code> - Comma-separated tags to apply (e.g., "QUAL-8D,production")</li>
                     </ul>
                   </div>
@@ -187,6 +188,7 @@ export function UploadCSVModal({ type, systems, schedules, onClose, onUpload }) 
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">is_active</code> - true/false (defaults to true)</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">compare_mode</code> - except_all, primary_key (defaults to except_all)</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">pk_columns</code> - Comma-separated primary key columns (used if compare_mode is 'primary_key')</li>
+                      <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">config_overrides</code> - JSON object for config overrides (e.g., {`{"skip_row_validation":true}`})</li>
                       <li><code className="bg-charcoal-700 px-2 py-0.5 rounded">tags</code> - Comma-separated tags to apply (e.g., "QUAL-8D,production")</li>
                     </ul>
                   </div>
@@ -267,8 +269,8 @@ export function UploadCSVModal({ type, systems, schedules, onClose, onUpload }) 
           {/* Preview */}
           {parsed && parsed.length > 0 && errors.length === 0 && (() => {
             const knownCols = type === 'tables'
-              ? ['name','src_schema','src_table','schedule_name','source','target','src_system_name','tgt_system_name','tgt_schema','tgt_table','is_active','compare_mode','pk_columns','watermark_filter','exclude_columns','tags']
-              : ['name','sql','schedule_name','source','target','src_system_name','tgt_system_name','is_active','compare_mode','pk_columns','tags'];
+              ? ['name','src_schema','src_table','schedule_name','source','target','src_system_name','tgt_system_name','tgt_schema','tgt_table','is_active','compare_mode','pk_columns','watermark_filter','exclude_columns','config_overrides','tags']
+              : ['name','sql','schedule_name','source','target','src_system_name','tgt_system_name','is_active','compare_mode','pk_columns','config_overrides','tags'];
             const cols = knownCols.filter(c => parsed[0]?.hasOwnProperty(c));
             return (
               <div className="mb-6">
@@ -285,11 +287,18 @@ export function UploadCSVModal({ type, systems, schedules, onClose, onUpload }) 
                       {parsed.map((row, i) => (
                         <tr key={i} className="border-b border-charcoal-300/30">
                           <td className="p-2">{i + 1}</td>
-                          {cols.map(key => (
-                            <td key={key} className="p-2 max-w-xs truncate" title={String(row[key] ?? '')}>
-                              {Array.isArray(row[key]) ? row[key].join(', ') : (row[key] ?? '')}
-                            </td>
-                          ))}
+                          {cols.map(key => {
+                            const val = row[key];
+                            const display = val === null || val === undefined ? '' 
+                              : Array.isArray(val) ? val.join(', ')
+                              : typeof val === 'object' ? JSON.stringify(val)
+                              : String(val);
+                            return (
+                              <td key={key} className="p-2 max-w-xs truncate" title={display}>
+                                {display}
+                              </td>
+                            );
+                          })}
                         </tr>
                       ))}
                     </tbody>

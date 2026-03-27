@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS control.datasets (
   exclude_columns  TEXT[] NOT NULL DEFAULT '{}',
   options          JSONB NOT NULL DEFAULT '{}'::jsonb,   -- tolerances, null eq, coercions
   is_active        BOOLEAN NOT NULL DEFAULT TRUE,
-  config_overrides JSONB DEFAULT NULL,                   -- DEPRECATED: use control.config table instead
+  config_overrides JSONB DEFAULT NULL,                   -- entity-specific validation config overrides
   lineage          JSONB DEFAULT NULL,                   -- upstream lineage (populated via Databricks Lineage API)
 
   created_by       TEXT NOT NULL,
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS control.compare_queries (
   watermark_filter TEXT DEFAULT NULL,                    -- optional WHERE clause filter
   options          JSONB NOT NULL DEFAULT '{}'::jsonb,
   is_active        BOOLEAN NOT NULL DEFAULT TRUE,
-  config_overrides JSONB DEFAULT NULL,                   -- DEPRECATED: use control.config table instead
+  config_overrides JSONB DEFAULT NULL,                   -- entity-specific validation config overrides
   lineage          JSONB DEFAULT NULL,                   -- upstream lineage (populated via Databricks Lineage API)
 
   created_by       TEXT NOT NULL,
@@ -377,20 +377,6 @@ ON CONFLICT (scope, COALESCE(scope_id, -1)) DO NOTHING;
 -- Seed empty global config if no migration occurred
 INSERT INTO control.config (scope, scope_id, settings, updated_by)
 VALUES ('global', NULL, '{}'::jsonb, 'system')
-ON CONFLICT (scope, COALESCE(scope_id, -1)) DO NOTHING;
-
--- Migrate entity-level config_overrides to control.config (datasets)
-INSERT INTO control.config (scope, scope_id, settings, updated_by, updated_at)
-SELECT 'table', id, config_overrides, updated_by, updated_at
-FROM control.datasets 
-WHERE config_overrides IS NOT NULL AND config_overrides != '{}'::jsonb
-ON CONFLICT (scope, COALESCE(scope_id, -1)) DO NOTHING;
-
--- Migrate entity-level config_overrides to control.config (compare_queries)
-INSERT INTO control.config (scope, scope_id, settings, updated_by, updated_at)
-SELECT 'compare_query', id, config_overrides, updated_by, updated_at
-FROM control.compare_queries 
-WHERE config_overrides IS NOT NULL AND config_overrides != '{}'::jsonb
 ON CONFLICT (scope, COALESCE(scope_id, -1)) DO NOTHING;
 
 -- 3) Add pk_vetted column to datasets and compare_queries

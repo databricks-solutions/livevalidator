@@ -34,8 +34,8 @@ class TestUpdateValidationConfig:
 class TestGetEffectiveConfig:
     async def test_merges_entity_override(self, mock_db: MockDBSession):
         mock_db.set_fetchrow_results(
-            {"settings": json.dumps({"downgrade_unicode": False})},  # global
-            {"settings": json.dumps({"downgrade_unicode": True})},  # entity override
+            {"settings": json.dumps({"downgrade_unicode": False})},  # global config
+            {"config_overrides": json.dumps({"downgrade_unicode": True})},  # entity override
         )
         service = ValidationConfigService(mock_db)
         result = await service.get_effective_config("table", 1)
@@ -43,8 +43,8 @@ class TestGetEffectiveConfig:
 
     async def test_returns_global_when_no_override(self, mock_db: MockDBSession):
         mock_db.set_fetchrow_results(
-            {"settings": json.dumps({"downgrade_unicode": True})},  # global
-            None,  # no control.config override
+            {"settings": json.dumps({"downgrade_unicode": True})},  # global config
+            {"config_overrides": None},  # entity has no override
         )
         service = ValidationConfigService(mock_db)
         result = await service.get_effective_config("table", 1)

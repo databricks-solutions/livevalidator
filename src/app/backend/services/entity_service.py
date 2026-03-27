@@ -36,7 +36,7 @@ class EntityService:
         field = model.model_fields[key]
         default = field.default_factory() if field.default_factory else field.default
         val = data.get(key, default)
-        if key == "options" and isinstance(val, (dict, list)):
+        if key in ("options", "config_overrides") and isinstance(val, (dict, list)):
             val = json.dumps(val)
         return val
 

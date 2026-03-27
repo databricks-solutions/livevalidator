@@ -18,15 +18,17 @@ const queryConfig = {
     const tgtSql = (row.tgt_sql || '').toLowerCase();
     return name.includes(search) || sql.includes(search) || tgtSql.includes(search);
   },
-  exportHeaders: ['name', 'sql', 'source', 'target', 'schedule_name', 'is_active', 'compare_mode', 'pk_columns', 'tags'],
+  exportHeaders: ['name', 'sql', 'source', 'target', 'schedule_name', 'is_active', 'compare_mode', 'pk_columns', 'config_overrides', 'tags'],
   exportRowFn: (row, systems) => {
     const srcSystem = systems.find(s => s.id === row.src_system_id)?.name || '';
     const tgtSystem = systems.find(s => s.id === row.tgt_system_id)?.name || '';
+    const configOverrides = row.config_overrides ? JSON.stringify(typeof row.config_overrides === 'string' ? JSON.parse(row.config_overrides) : row.config_overrides) : '';
     return [
       row.name, row.sql, srcSystem, tgtSystem,
       parseArray(row.schedules).join(','),
       row.is_active ? 'true' : 'false', row.compare_mode || 'except_all',
       Array.isArray(row.pk_columns) ? row.pk_columns.join(',') : (row.pk_columns || ''),
+      configOverrides,
       parseArray(row.tags).join(',')
     ];
   },

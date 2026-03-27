@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { TagInput } from '../TagInput';
+import { ConfigOverrides } from '../ConfigOverrides';
 
 export function TableModal({ table, systems, schedules, onSave, onClose }) {
   const [errors, setErrors] = useState([]);
@@ -31,6 +32,7 @@ export function TableModal({ table, systems, schedules, onSave, onClose }) {
     pk_columns: table?.pk_columns || [],
     watermark_filter: table?.watermark_filter || "",
     exclude_columns: table?.exclude_columns || [],
+    config_overrides: table?.config_overrides || null,
     version: table?.version || 0
   }));
   
@@ -278,6 +280,16 @@ export function TableModal({ table, systems, schedules, onSave, onClose }) {
                 ))
               )}
             </div>
+          </div>
+          
+          {/* Config Overrides */}
+          <div className="mb-3 pb-3 border-t border-charcoal-200 pt-3">
+            <label className="block mb-1 font-medium text-gray-400 text-sm">Config Overrides</label>
+            <p className="text-gray-500 text-xs mb-3">Override global validation settings for this table only</p>
+            <ConfigOverrides
+              value={form.config_overrides}
+              onChange={(val) => setForm({...form, config_overrides: val})}
+            />
           </div>
         </div>
         
