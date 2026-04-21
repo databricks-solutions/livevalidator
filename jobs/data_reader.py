@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 from collections.abc import Callable
 from typing import Any
@@ -40,6 +41,45 @@ def get_type_transformations(
         "GET", f"/api/type-transformations/for-validation/{source_system_id}/{target_system_id}"
     )
     return data.get("system_a_function", ""), data.get("system_b_function", "")
+
+
+def quote_for_kind(kind: str) -> tuple[str, str]:
+    if kind == "SQLServer":
+        return ("[", "]")
+    if kind in ("Databricks", "MySQL"):
+        return ("`", "`")
+    return ('"', '"')
+
+
+def quote_identifier(name: str, kind: str) -> str:
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+        return name
+    open_q, close_q = quote_for_kind(kind)
+    if close_q == "]":
+        name = name.replace("]", "]]")
+    elif close_q == "`":
+        name = name.replace("`", "``")
+    elif close_q == '"':
+        name = name.replace('"', '""')
+    return f"{open_q}{name}{close_q}"
+
+
+def _rewrite_watermark(expr: str, kind: str) -> str:
+    """Rewrite backtick-quoted identifiers in a watermark expression for *kind*."""
+    if kind in ("Databricks", "MySQL"):
+        return expr
+    open_q, close_q = quote_for_kind(kind)
+    pattern = r"`([^`]*)`"
+
+    def repl(m: re.Match[str]) -> str:
+        inner = m.group(1)
+        if close_q == "]":
+            inner = inner.replace("]", "]]")
+        elif close_q == '"':
+            inner = inner.replace('"', '""')
+        return f"{open_q}{inner}{close_q}"
+
+    return re.sub(pattern, repl, expr)
 
 
 def get_column_types(conn: dict, table: str) -> list[tuple[str, str]]:
@@ -98,6 +138,7 @@ def generate_read_query(
         transform_columns = namespace["transform_columns"]
 
     col_types: list[tuple[str, str]] = get_column_types(conn, table)
+    col_types = [(n, t) for n, t in col_types if n and (n.strip() if isinstance(n, str) else True)]
 
     cast_columns: list[str] = []
     for name, data_type in col_types:
@@ -117,6 +158,9 @@ def read_count(
     """Get row count from system using pushed-down COUNT(*)"""
     spark: SparkSession = SparkSession.getActiveSession()
     is_databricks: bool = conn["system"]["kind"] == "Databricks"
+
+    if watermark_expr:
+        watermark_expr = _rewrite_watermark(watermark_expr, conn["system"]["kind"])
 
     if query:
         if is_databricks:
@@ -149,6 +193,9 @@ def read_data(
     spark: SparkSession = SparkSession.getActiveSession()
     is_databricks: bool = conn["system"]["kind"] == "Databricks"
     jdbc_reader: JDBCReader = JDBCReader(conn)
+
+    if watermark_expr:
+        watermark_expr = _rewrite_watermark(watermark_expr, conn["system"]["kind"])
 
     df: DataFrame
     if query:
