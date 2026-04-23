@@ -100,12 +100,20 @@ resources:
         - principal: account users
           privileges:
             - USE CATALOG
+            - USE_SCHEMA
             - SELECT
   schemas:
     entities:
       name: entities
       catalog_name: ${resources.catalogs.live_validator_data.name}
-      comment: "Store point-in-time entity data"
+      comment: "Store point-in-time entity data"     
+      grants:
+        - principal: account users
+          privileges:
+            - USE_SCHEMA
+            - CREATE_TABLE
+            - SELECT
+            - MODIFY
 
 targets:
 
