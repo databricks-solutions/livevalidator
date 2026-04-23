@@ -618,7 +618,7 @@ Every other testing layer in this document tests what you can imagine. Generativ
 
 Invented by John Hughes & Koen Claessen (1999) with Haskell's QuickCheck. The idea: stop writing `assert f(3) == 6`. Instead, write `assert forall x, f(x) * 2 == f(x) + f(x)` and let a framework generate thousands of `x` values — including ones you'd never think of.
 
-**Shrinking** is what makes PBT debuggable: when a property fails on `[{"name":"foo","age":-2147483648,"email":"a@b. c"}]`, the framework simplifies while preserving failure, producing `[{"age":-2147483648}]` as the minimal counterexample.
+**Shrinking** is what makes PBT debuggable: when a property fails on `[{"name":"foo","age":-2147483648,"email":"a@b.\u0000c"}]`, the framework simplifies while preserving failure, producing `[{"age":-2147483648}]` as the minimal counterexample.
 
 A 2024 ICSE study found that in production codebases, round-trip properties and differential/model-based properties dominate real usage — and PBT reliably surfaces bugs that survived years of traditional testing.
 
