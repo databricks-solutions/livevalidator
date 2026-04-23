@@ -99,7 +99,7 @@ resources:
       grants:
         - principal: account users
           privileges:
-            - USE CATALOG
+            - USE_CATALOG
             - USE_SCHEMA
             - SELECT
   schemas:
