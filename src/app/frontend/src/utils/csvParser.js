@@ -69,8 +69,10 @@ function validateCSVData(data, type, schedules, systems) {
         rowErrors.push(`Target system '${tgtSystemName}' not found`);
       }
       
-      const configOverrides = parseJson(row.config_overrides, rowErrors, 'config_overrides');
-      const options = parseJson(row.options, rowErrors, 'options');
+      const hasOptions = row.hasOwnProperty('options');
+      const hasConfigOverrides = row.hasOwnProperty('config_overrides');
+      const configOverrides = hasConfigOverrides ? parseJson(row.config_overrides, rowErrors, 'config_overrides') : undefined;
+      let options = hasOptions ? (parseJson(row.options, rowErrors, 'options') || {}) : undefined;
       // Resolve system names to IDs in column_overrides (CSV export uses names for readability)
       if (options?.column_overrides && systems.length > 0) {
         const resolved = {};
@@ -94,8 +96,8 @@ function validateCSVData(data, type, schedules, systems) {
           pk_columns: row.pk_columns ? row.pk_columns.split(',').map(s => s.trim()) : null,
           include_columns: row.include_columns ? row.include_columns.split(',').map(s => s.trim()) : [],
           exclude_columns: row.exclude_columns ? row.exclude_columns.split(',').map(s => s.trim()) : [],
-          options: options,
-          config_overrides: configOverrides,
+          ...(hasOptions ? { options } : {}),
+          ...(hasConfigOverrides ? { config_overrides: configOverrides } : {}),
           tags: row.tags ? row.tags.split(',').map(s => s.trim()).filter(s => s) : [],
           schedule_names: scheduleNames,
           src_system_name: srcSystemName,
@@ -132,7 +134,8 @@ function validateCSVData(data, type, schedules, systems) {
         rowErrors.push(`Target system '${tgtSystemName}' not found`);
       }
       
-      const configOverrides = parseJson(row.config_overrides, rowErrors, 'config_overrides');
+      const hasConfigOverrides = row.hasOwnProperty('config_overrides');
+      const configOverrides = hasConfigOverrides ? parseJson(row.config_overrides, rowErrors, 'config_overrides') : undefined;
       
       if (rowErrors.length === 0) {
         const tgtRaw = row.tgt_sql != null && String(row.tgt_sql).trim() ? String(row.tgt_sql).trim() : null;
@@ -146,7 +149,7 @@ function validateCSVData(data, type, schedules, systems) {
           pk_columns: row.pk_columns ? row.pk_columns.split(',').map(s => s.trim()) : null,
           include_columns: row.include_columns ? row.include_columns.split(',').map(s => s.trim()) : [],
           exclude_columns: row.exclude_columns ? row.exclude_columns.split(',').map(s => s.trim()) : [],
-          config_overrides: configOverrides,
+          ...(hasConfigOverrides ? { config_overrides: configOverrides } : {}),
           tags: row.tags ? row.tags.split(',').map(s => s.trim()).filter(s => s) : [],
           schedule_names: scheduleNames,
           src_system_name: srcSystemName,

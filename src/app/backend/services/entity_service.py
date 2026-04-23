@@ -257,7 +257,13 @@ class EntityService:
                     entity_id,
                 )
 
-    async def _bind_tags(self, entity_id: int, tags: list[str]) -> None:
+    async def _bind_tags(self, entity_id: int, tags: list[str], clear: bool = False) -> None:
+        if clear:
+            await self.db.execute(
+                "DELETE FROM control.entity_tags WHERE entity_type=$1 AND entity_id=$2",
+                self.label,
+                entity_id,
+            )
         for tag_name in tags:
             tag_name = tag_name.strip()
             if not tag_name:
@@ -292,8 +298,10 @@ class EntityService:
             data.setdefault("tgt_table", item.get("src_table"))
         skip = {"name"}
         sets, vals = [], [entity_id]
-        for i, col in enumerate(c for c in self.columns if c not in skip):
-            sets.append(f"{col}=${i + 2}")
+        for col in (c for c in self.columns if c not in skip):
+            if col not in data:
+                continue
+            sets.append(f"{col}=${len(vals) + 1}")
             vals.append(self._get_value(data, col, self.update_model))
         if item.get("pk_columns") is not None:
             current = await self.db.fetchrow(f"SELECT pk_columns FROM {self.db_table} WHERE id = $1", entity_id)
@@ -322,6 +330,8 @@ class EntityService:
                     row = await self._bulk_update(existing["id"], item, src_id, tgt_id)
                     if sched_names:
                         await self._bind_schedules(row["id"], sched_names, clear=True)
+                    if "tags" in item:
+                        await self._bind_tags(row["id"], item.get("tags") or [], clear=True)
                     results["updated"].append({"row": idx + 1, "name": name, "data": row})
                 else:
                     row = await self._bulk_insert(item, name, src_id, tgt_id)
