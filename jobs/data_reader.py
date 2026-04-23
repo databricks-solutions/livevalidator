@@ -43,43 +43,20 @@ def get_type_transformations(
     return data.get("system_a_function", ""), data.get("system_b_function", "")
 
 
-def quote_for_kind(kind: str) -> tuple[str, str]:
-    if kind == "SQLServer":
-        return ("[", "]")
-    if kind in ("Databricks", "MySQL"):
-        return ("`", "`")
-    return ('"', '"')
-
-
-def quote_identifier(name: str, kind: str) -> str:
-    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
-        return name
-    open_q, close_q = quote_for_kind(kind)
-    if close_q == "]":
-        name = name.replace("]", "]]")
-    elif close_q == "`":
-        name = name.replace("`", "``")
-    elif close_q == '"':
-        name = name.replace('"', '""')
-    return f"{open_q}{name}{close_q}"
-
-
-def _rewrite_watermark(expr: str, kind: str) -> str:
-    """Rewrite backtick-quoted identifiers in a watermark expression for *kind*."""
+def format_watermark_expr(expr: str, kind: str) -> str:
+    """Rewrite backtick-quoted identifiers to the target system's native quoting. Also uppercase for Oracle/Netezza"""
     if kind in ("Databricks", "MySQL"):
         return expr
-    open_q, close_q = quote_for_kind(kind)
-    pattern = r"`([^`]*)`"
 
-    def repl(m: re.Match[str]) -> str:
-        inner = m.group(1)
-        if close_q == "]":
-            inner = inner.replace("]", "]]")
-        elif close_q == '"':
-            inner = inner.replace('"', '""')
-        return f"{open_q}{inner}{close_q}"
+    def _requote(m: re.Match[str]) -> str:
+        name = m.group(1)
+        if kind == "SQLServer":
+            return f"[{name.replace(']', ']]')}]"
+        if kind in ("Oracle", "Netezza"):
+            name = name.upper()
+        return f'"{name.replace('"', '""')}"'
 
-    return re.sub(pattern, repl, expr)
+    return re.sub(r"`([^`]*)`", _requote, expr)
 
 
 def get_column_types(conn: dict, table: str) -> list[tuple[str, str]]:
@@ -160,7 +137,7 @@ def read_count(
     is_databricks: bool = conn["system"]["kind"] == "Databricks"
 
     if watermark_expr:
-        watermark_expr = _rewrite_watermark(watermark_expr, conn["system"]["kind"])
+        watermark_expr = format_watermark_expr(watermark_expr, conn["system"]["kind"])
 
     if query:
         if is_databricks:
@@ -195,7 +172,7 @@ def read_data(
     jdbc_reader: JDBCReader = JDBCReader(conn)
 
     if watermark_expr:
-        watermark_expr = _rewrite_watermark(watermark_expr, conn["system"]["kind"])
+        watermark_expr = format_watermark_expr(watermark_expr, conn["system"]["kind"])
 
     df: DataFrame
     if query:
