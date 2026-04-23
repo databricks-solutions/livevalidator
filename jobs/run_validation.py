@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from databricks.sdk.runtime import dbutils
 from pyspark import StorageLevel
 from pyspark.sql import DataFrame, Row, SparkSession
-from pyspark.sql.functions import col, xxhash64
+from pyspark.sql.functions import col, xxhash64, countDistinct
 
 _nb_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
 sys.path.insert(0, "/Workspace" + os.path.dirname(_nb_path))
@@ -402,10 +402,20 @@ if not history_id:
 
 # COMMAND ----------
 
+# Compute unique row counts on count mismatch
+unique_counts: dict = {}
+if not result["row_count_match"]:
+    print("Computing unique row counts...")
+    unique_src = src_df.select(countDistinct(xxhash64(*[col(c) for c in src_df.columns]))).collect()[0][0]
+    unique_tgt = tgt_df.select(countDistinct(xxhash64(*[col(c) for c in tgt_df.columns]))).collect()[0][0]
+    unique_counts = {"unique_count_source": unique_src, "unique_count_target": unique_tgt}
+    print(f"Unique rows: source={unique_src}, target={unique_tgt}")
+
 if compare_mode == "except_all" and history_id:
     print("Running except_all analysis...")
     except_all_analysis = run_except_all_count_analysis(result)
     if except_all_analysis:
+        except_all_analysis.update(unique_counts)
         client.api_call("PATCH", f"/api/validation-history/{history_id}", {"sample_differences": except_all_analysis})
         print(f"Updated validation history {history_id} with except_all analysis")
     reason = "Row count mismatch" if not result["row_count_match"] else "Row value mismatch"
@@ -438,6 +448,7 @@ if pk_sample_differences:
 if not result["row_count_match"]:
     pk_count_analysis = run_pk_count_analysis(result)
     if pk_count_analysis and history_id:
+        pk_count_analysis.update(unique_counts)
         client.api_call("PATCH", f"/api/validation-history/{history_id}", {"sample_differences": pk_count_analysis})
         if not pk_count_analysis.get("skipped"):
             print(f"Updated validation history {history_id} with PK count analysis")

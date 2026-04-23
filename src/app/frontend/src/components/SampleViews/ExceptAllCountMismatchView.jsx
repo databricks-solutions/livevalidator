@@ -21,14 +21,36 @@ export function ExceptAllCountMismatchView({ samples, validation }) {
   
   return (
     <div className="space-y-3">
-      <div className="p-2 bg-orange-900/20 border border-orange-700 rounded">
-        <p className="text-orange-300 text-xs">
-          {validation.row_count_match === false ? (
-            <>Row count mismatch: Source has {validation.row_count_source?.toLocaleString()} rows, Target has {validation.row_count_target?.toLocaleString()} rows (diff: {Math.abs((validation.row_count_source || 0) - (validation.row_count_target || 0)).toLocaleString()})</>
-          ) : (
-            <>Row values differ: {validation.rows_different?.toLocaleString()} rows differ out of {validation.rows_compared?.toLocaleString()} compared</>
-          )}
+      <div className="p-3 bg-orange-900/20 border border-orange-700 rounded">
+        <p className="text-orange-300 text-xs font-semibold mb-2">
+          {validation.row_count_match === false ? 'Row count mismatch:' : 'Row values differ:'}
         </p>
+        <table className="text-xs w-auto border-collapse">
+          <thead>
+            <tr className="text-gray-400">
+              <th className="text-left pr-6 pb-1"></th>
+              <th className="text-right pr-6 pb-1">Source</th>
+              <th className="text-right pr-6 pb-1">Target</th>
+              <th className="text-right pb-1">Diffs</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="text-orange-200">
+              <td className="pr-6 py-0.5 font-medium">Total Rows</td>
+              <td className="text-right pr-6">{validation.row_count_source?.toLocaleString()}</td>
+              <td className="text-right pr-6">{validation.row_count_target?.toLocaleString()}</td>
+              <td className="text-right">{Math.abs((validation.row_count_source || 0) - (validation.row_count_target || 0)).toLocaleString()}</td>
+            </tr>
+            {samples.unique_count_source != null && (
+              <tr className="text-orange-200/80">
+                <td className="pr-6 py-0.5 font-medium">Unique Rows</td>
+                <td className="text-right pr-6">{samples.unique_count_source?.toLocaleString()}</td>
+                <td className="text-right pr-6">{samples.unique_count_target?.toLocaleString()}</td>
+                <td className="text-right">{Math.abs((samples.unique_count_source || 0) - (samples.unique_count_target || 0)).toLocaleString()}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
       
       {column_differences && column_differences.length > 0 && (

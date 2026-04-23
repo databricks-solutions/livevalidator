@@ -9,6 +9,8 @@ sys.path.insert(0, _jobs_dir)
 
 from analysis_utils import summarize_df, compare_summaries
 
+COLUMN_ANALYSIS_CAP = 500_000
+
 
 def run_except_all_count_analysis(result: dict) -> dict | None:
     """
@@ -31,44 +33,56 @@ def run_except_all_count_analysis(result: dict) -> dict | None:
         return None
 
     if source_was_limited and row_count_source < row_count_target:
-        return {"mode": "row_count_mismatch_except_all", 
+        return {"mode": "row_count_mismatch_except_all",
                 "data": {"skipped": True, "reason": "source_limited_and_fewer"}}
 
-    # Compute diffs if needed
-    if not row_count_match and src_tgt_diff_df is None:
-        src_tgt_diff_df = src_df.exceptAll(tgt_df)
+    try:
+        if not row_count_match and src_tgt_diff_df is None:
+            src_tgt_diff_df = src_df.exceptAll(tgt_df)
+            if os.environ.get("IS_SERVERLESS"):
+                src_tgt_diff_df = src_tgt_diff_df.localCheckpoint(eager=True)
+            else:
+                src_tgt_diff_df = src_tgt_diff_df.cache()
+            in_src_not_tgt_count = src_tgt_diff_df.count()
+            in_src_not_tgt_samples = [r.asDict() for r in src_tgt_diff_df.limit(10).collect()]
+
+        tgt_src_diff_df = tgt_df.exceptAll(src_df)
         if os.environ.get("IS_SERVERLESS"):
-            src_tgt_diff_df.localCheckpoint(eager=True)
+            tgt_src_diff_df = tgt_src_diff_df.localCheckpoint(eager=True)
         else:
-            src_tgt_diff_df.cache()
-        in_src_not_tgt_count = src_tgt_diff_df.count()
-        in_src_not_tgt_samples = [r.asDict() for r in src_tgt_diff_df.limit(10).collect()]
+            tgt_src_diff_df = tgt_src_diff_df.cache()
+        in_tgt_not_src_count = tgt_src_diff_df.count()
+        in_tgt_not_src_samples = [r.asDict() for r in tgt_src_diff_df.limit(10).collect()]
 
-    tgt_src_diff_df = tgt_df.exceptAll(src_df)
-    if os.environ.get("IS_SERVERLESS"):
-        tgt_src_diff_df.localCheckpoint(eager=True)
-    else:
-        tgt_src_diff_df.cache()
-    in_tgt_not_src_count = tgt_src_diff_df.count()
-    in_tgt_not_src_samples = [r.asDict() for r in tgt_src_diff_df.limit(10).collect()]
+        column_differences = []
+        if in_src_not_tgt_count < COLUMN_ANALYSIS_CAP and in_tgt_not_src_count < COLUMN_ANALYSIS_CAP:
+            column_differences = compare_summaries(
+                summarize_df(src_tgt_diff_df, []),
+                summarize_df(tgt_src_diff_df, [])
+            )
 
-    # Compare summaries of the two diff DataFrames
-    column_differences = compare_summaries(
-        summarize_df(src_tgt_diff_df, []),
-        summarize_df(tgt_src_diff_df, [])
-    )
-    if not os.environ.get("IS_SERVERLESS"):
-        src_tgt_diff_df.unpersist()
-        tgt_src_diff_df.unpersist()
-        src_df.unpersist()
-        tgt_df.unpersist()
+        if not os.environ.get("IS_SERVERLESS"):
+            if src_tgt_diff_df is not None:
+                src_tgt_diff_df.unpersist()
+            tgt_src_diff_df.unpersist()
+            src_df.unpersist()
+            tgt_df.unpersist()
 
-    return {
-        "mode": "row_count_mismatch_except_all",
-        "data": {
-            "column_differences": column_differences,
-            "in_source_not_target": {"count": in_src_not_tgt_count, "samples": in_src_not_tgt_samples[:10]},
-            "in_target_not_source": {"count": in_tgt_not_src_count, "samples": in_tgt_not_src_samples[:10]}
+        return {
+            "mode": "row_count_mismatch_except_all",
+            "data": {
+                "column_differences": column_differences,
+                "in_source_not_target": {"count": in_src_not_tgt_count, "samples": in_src_not_tgt_samples[:10]},
+                "in_target_not_source": {"count": in_tgt_not_src_count, "samples": in_tgt_not_src_samples[:10]}
+            }
         }
-}
-    
+    except Exception as e:
+        print(f"[WARN] Except-all analysis failed: {e}")
+        return {
+            "mode": "row_count_mismatch_except_all",
+            "data": {
+                "column_differences": [],
+                "in_source_not_target": {"count": in_src_not_tgt_count, "samples": in_src_not_tgt_samples[:10]},
+                "in_target_not_source": {"count": 0, "samples": []}
+            }
+        }
