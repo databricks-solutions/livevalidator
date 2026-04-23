@@ -95,9 +95,9 @@ Before deploying, create a credential for your App to authenticate with LakeBase
 
 **1. Choose a username** — We recommend `apprunner`.
 
-**2. Generate a secure password** — Use [Password Generator](https://www.calculator.net/password-generator.html) to create a password with **at least 60 bits of entropy**. 
+**2. Generate a secure password** — Use [Password Generator](https://www.avast.com/en-us/random-password-generator#mac) to create a password with **at least 60 bits of entropy**. 
 
-> **Note:** Avoid special characters that may cause issues in connection strings (e.g., `@`, `%`, `/`).
+> **Note:** Avoid special characters that may cause technical issues (e.g., `$`, `@`, `%`, `/`).
 
 **3. Store credentials in a secret scope** — Use either the CLI or Python SDK:
 
