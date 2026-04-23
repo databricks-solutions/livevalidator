@@ -218,7 +218,9 @@ class ValidationHistoryService:
                 vh.status, vh.schema_match, vh.row_count_match,
                 vh.row_count_source, vh.row_count_target,
                 vh.rows_compared, vh.rows_different, vh.difference_pct,
-                vh.compare_mode, vh.error_message, vh.databricks_run_url
+                vh.compare_mode, vh.error_message, vh.databricks_run_url,
+                (vh.sample_differences->>'unique_count_source')::bigint as unique_count_source,
+                (vh.sample_differences->>'unique_count_target')::bigint as unique_count_target
             FROM control.validation_history vh
             {tag_join}
             {where_clause}
