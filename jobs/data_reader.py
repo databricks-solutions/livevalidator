@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 from collections.abc import Callable
 from typing import Any
@@ -40,6 +41,22 @@ def get_type_transformations(
         "GET", f"/api/type-transformations/for-validation/{source_system_id}/{target_system_id}"
     )
     return data.get("system_a_function", ""), data.get("system_b_function", "")
+
+
+def format_watermark_expr(expr: str, kind: str) -> str:
+    """Rewrite backtick-quoted identifiers to the target system's native quoting. Also uppercase for Oracle/Netezza"""
+    if kind in ("Databricks", "MySQL"):
+        return expr
+
+    def _requote(m: re.Match[str]) -> str:
+        name = m.group(1)
+        if kind == "SQLServer":
+            return f"[{name.replace(']', ']]')}]"
+        if kind in ("Oracle", "Netezza"):
+            name = name.upper()
+        return f'"{name.replace('"', '""')}"'
+
+    return re.sub(r"`([^`]*)`", _requote, expr)
 
 
 def get_column_types(conn: dict, table: str) -> list[tuple[str, str]]:
@@ -98,6 +115,7 @@ def generate_read_query(
         transform_columns = namespace["transform_columns"]
 
     col_types: list[tuple[str, str]] = get_column_types(conn, table)
+    col_types = [(n, t) for n, t in col_types if n and (n.strip() if isinstance(n, str) else True)]
 
     cast_columns: list[str] = []
     for name, data_type in col_types:
@@ -117,6 +135,9 @@ def read_count(
     """Get row count from system using pushed-down COUNT(*)"""
     spark: SparkSession = SparkSession.getActiveSession()
     is_databricks: bool = conn["system"]["kind"] == "Databricks"
+
+    if watermark_expr:
+        watermark_expr = format_watermark_expr(watermark_expr, conn["system"]["kind"])
 
     if query:
         if is_databricks:
@@ -149,6 +170,9 @@ def read_data(
     spark: SparkSession = SparkSession.getActiveSession()
     is_databricks: bool = conn["system"]["kind"] == "Databricks"
     jdbc_reader: JDBCReader = JDBCReader(conn)
+
+    if watermark_expr:
+        watermark_expr = format_watermark_expr(watermark_expr, conn["system"]["kind"])
 
     df: DataFrame
     if query:
