@@ -1,7 +1,5 @@
 """Miscellaneous routes (timezones, bindings, queue status, current user)."""
 
-import os
-
 from fastapi import APIRouter, Depends
 
 from backend.dependencies import DBSession, get_current_user_email, get_db
@@ -11,11 +9,6 @@ from backend.services.triggers_service import TriggersService
 from backend.services.users_service import UsersService
 
 router = APIRouter(tags=["misc"])
-
-
-@router.get("/secrets")
-async def question():
-    return (os.environ.get("DATABRICKS_CLIENT_ID"), os.environ.get("DATABRICKS_CLIENT_SECRET"))
 
 
 @router.get("/current_user")

@@ -14,9 +14,13 @@
 # COMMAND ----------
 
 import json
+import os
+import sys
 import requests
+from databricks.sdk import WorkspaceClient
 from databricks.sdk.runtime import dbutils
 from pyspark.sql import SparkSession
+from backend_api_client import BackendAPIClient
 _nb_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
 sys.path.insert(0, "/Workspace" + os.path.dirname(_nb_path))
 
@@ -43,20 +47,11 @@ if not table_name or not catalog_name:
 # COMMAND ----------
 
 # --- Authenticate with the Databricks workspace ---
-# Uses the service principal stored in the "livevalidator" secret scope to generate
-# OAuth headers for calling Databricks REST APIs (Lineage + Unity Catalog).
-spark = SparkSession.getActiveSession()
-workspace_url = spark.conf.get("spark.databricks.workspaceUrl")
-if not workspace_url.startswith("http"):
-    workspace_url = "https://" + workspace_url
-databricks_host = workspace_url.rstrip("/")
-
-from databricks.sdk import WorkspaceClient
-w = WorkspaceClient(
-    host=databricks_host,
-    client_id=dbutils.secrets.get(scope="livevalidator", key="lv-app-id"),
-    client_secret=dbutils.secrets.get(scope="livevalidator", key="lv-app-secret"),
-)
+# Uses the notebook token (PAT) for calling Databricks REST APIs (Lineage + Unity Catalog).
+# BackendAPIClient is also reused at the bottom for posting results to the backend.
+client = BackendAPIClient(backend_api_url=backend_api_url or None)
+databricks_host = client._host()
+w = WorkspaceClient(host=databricks_host, token=client._notebook_token(), auth_type="pat")
 auth_headers = w.config.authenticate()
 
 # COMMAND ----------
@@ -194,8 +189,6 @@ except Exception:
 lineage_data = {"entity_object_type": entity_object_type, "items": lineage_payload}
 
 if backend_api_url and entity_type and entity_id:
-    from backend_api_client import BackendAPIClient
-    client = BackendAPIClient(backend_api_url=backend_api_url)
     type_path = "tables" if entity_type == "table" else "queries"
     client.api_call("PATCH", f"/api/{type_path}/{entity_id}/lineage", {"lineage": lineage_data})
     print(f"Posted lineage ({len(lineage_payload)} nodes, entity_type={entity_object_type}) to {entity_type} {entity_id}")
