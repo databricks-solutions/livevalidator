@@ -11,7 +11,7 @@ resources:
       environments:
         - environment_key: default
           spec:
-            environment_version: "1"
+            environment_version: ${var.serverless_version}
       max_concurrent_runs: 10
       parameters:
         - name: table_name
