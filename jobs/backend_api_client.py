@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import cached_property
 import requests
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Any
 import base64
+from urllib.parse import urlparse
+import re
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.runtime import dbutils
 from pyspark.sql import SparkSession
@@ -16,15 +19,47 @@ class BackendAPIClient:
     backend_api_url: str | None = None
     _w: WorkspaceClient | None = None
 
+    def _host(self) -> str:
+        host = SparkSession.builder.getOrCreate().conf.get("spark.databricks.workspaceUrl")
+        return (host if host.startswith("https://") else f"https://{host}").rstrip("/")
+
+    @property
+    def app_name(self) -> str:
+        if not self.backend_api_url:
+            raise ValueError("backend_api_url is not set")
+        host = (urlparse(self.backend_api_url).hostname or "").split(".")[0]
+        return re.sub(r"-\d+$", "", host)  # strip trailing workspace id
+
+    def _notebook_token(self) -> str:
+        return (
+            dbutils.notebook.entry_point.getDbutils()
+            .notebook()
+            .getContext()
+            .apiToken()
+            .get()
+        )
+
+    @cached_property
+    def app_client_id(self) -> str:
+        w = WorkspaceClient(host=self._host(), token=self._notebook_token(), auth_type="pat")
+        return w.apps.get(self.app_name).oauth2_app_client_id
+
     def get_workspace_client(self) -> WorkspaceClient:
-        """Lazy initialization of WorkspaceClient singleton."""
         if self._w is None:
-            spark = SparkSession.builder.getOrCreate()
-            self._w = WorkspaceClient(
-                host=spark.conf.get("spark.databricks.workspaceUrl"),
-                client_id=dbutils.secrets.get(scope="livevalidator", key="lv-app-id"),
-                client_secret=dbutils.secrets.get(scope="livevalidator", key="lv-app-secret"),
+            r = requests.post(
+                f"{self._host()}/oidc/v1/token",
+                data={
+                    "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+                    "subject_token": self._notebook_token(),
+                    "subject_token_type": "urn:databricks:params:oauth:token-type:personal-access-token",
+                    "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
+                    "scope": "all-apis",
+                    "audience": self.app_client_id,
+                },
+                timeout=30,
             )
+            r.raise_for_status()
+            self._w = WorkspaceClient(host=self._host(), token=r.json()["access_token"], auth_type="pat")
         return self._w
 
     def _serialize_value(self, val: Any) -> Any:

@@ -145,47 +145,19 @@ GRANT USAGE, SELECT ON SEQUENCES TO apprunner;`}
               <span className="font-semibold text-amber-300">JDBC Sources:</span> Ensure the correct driver JARs are added as job dependencies in <code className="text-amber-200">databricks.yml</code> under <code className="text-amber-200">run_validation</code> and{' '}
               <a href="https://docs.databricks.com/aws/en/data-governance/unity-catalog/manage-privileges/allowlist#add-a-jar-to-the-allowlist" target="_blank" rel="noopener noreferrer" className="text-amber-300 hover:text-amber-200 underline">added to the UC Allowlist</a>.
             </div>
+            <div className="mt-3 ml-9 px-3 py-2 bg-amber-950/40 border-l-2 border-amber-500 rounded-r text-xs text-amber-100/90">
+              <span className="font-semibold text-amber-300">JDBC Auth:</span> If your JDBC sources need credentials, store them in the <code className="text-amber-200">livevalidator</code> secret scope:
+              <pre className="mt-2 bg-charcoal-800 p-2 rounded text-xs text-gray-200 overflow-x-auto border border-gray-700">
+{`w.secrets.put_secret('livevalidator', key="mysystem_user", string_value="my_user")
+w.secrets.put_secret('livevalidator', key="mysystem_pass", string_value="*******")`}
+              </pre>
+            </div>
           </div>
 
           {/* Step 6 */}
           <div className="mb-5 pb-5 border-b border-gray-700">
             <h4 className="text-purple-300 font-semibold text-lg mb-3">
               <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">6</span>
-              Define Secrets
-            </h4>
-            <p className="text-gray-300 text-sm mb-3 ml-9">
-              While eng is working on an oauth token exchange, add secrets for the LiveValidator app service principal.
-              Get the values from: <a 
-                href="/api/secrets" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-300 underline"
-              >/api/secrets</a>
-            </p>
-            <pre className="bg-charcoal-800 p-3 rounded text-xs text-gray-200 overflow-x-auto border border-gray-700 ml-9">
-{`from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.workspace import AclPermission
-
-w = WorkspaceClient()
-w.secrets.put_acl('livevalidator', 'users', AclPermission.READ)
-w.secrets.put_secret('livevalidator', key="lv-app-id", string_value=<first value>)
-w.secrets.put_secret('livevalidator', key="lv-app-secret", string_value=<second value>)`}
-            </pre>
-            <div>
-            <p className="text-gray-300 text-sm mb-3 ml-9">
-              Add secrets for any JDBC authentication if needed:
-            </p>
-            <pre className="bg-charcoal-800 p-3 rounded text-xs text-gray-200 overflow-x-auto border border-gray-700 ml-9">
-{`w.secrets.put_secret('livevalidator', key="mysystem_user", string_value="my_user")
-w.secrets.put_secret('livevalidator', key="mysystem_pass", string_value="*******")`}
-            </pre>
-            </div>
-          </div>
-
-          {/* Step 7 */}
-          <div className="mb-5 pb-5 border-b border-gray-700">
-            <h4 className="text-purple-300 font-semibold text-lg mb-3">
-              <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">7</span>
               Start <strong>Job Sentinel</strong>
             </h4>
             <p className="text-gray-300 text-sm ml-9">
@@ -199,10 +171,10 @@ w.secrets.put_secret('livevalidator', key="mysystem_pass", string_value="*******
             </p>
           </div>
 
-          {/* Step 8 */}
+          {/* Step 7 */}
           <div className="mb-5">
             <h4 className="text-purple-300 font-semibold text-lg mb-3">
-              <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">8</span>
+              <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">7</span>
               Add Tables and Queries
             </h4>
             <p className="text-gray-300 text-sm ml-9">
@@ -211,10 +183,10 @@ w.secrets.put_secret('livevalidator', key="mysystem_pass", string_value="*******
             </p>
           </div>
 
-          {/* Step 9 */}
+          {/* Step 8 */}
           <div className="mb-5 pb-5 border-b border-gray-700">
             <h4 className="text-purple-300 font-semibold text-lg mb-3">
-              <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">9</span>
+              <span className="bg-purple-600 text-white rounded-full w-7 h-7 inline-flex items-center justify-center mr-2 text-sm">8</span>
               Create Schedules
             </h4>
             <p className="text-gray-300 text-sm ml-9">
