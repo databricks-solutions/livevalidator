@@ -27,8 +27,8 @@ export function Sidebar({ view, setView, setupRequired }) {
     <div className="w-48 border-r border-charcoal-200 py-5 fixed top-0 left-0 bottom-0 flex flex-col bg-charcoal-600">
       <div className="px-4 mb-6">
         <h2 className="text-lg font-bold text-rust inline-block">LiveValidator</h2>
-        <span className="ml-2 inline-block px-2 py-0.5 text-[10px] font-bold tracking-wider bg-gradient-to-r from-purple-500 to-purple-700 text-white rounded-full border border-purple-400 shadow-lg shadow-purple-500/50 transform -rotate-3 relative top-[-2px]">
-          BETA
+        <span className="ml-2 inline-block px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-gray-400 border border-gray-600 rounded">
+          v0.1.0-rc
         </span>
       </div>
       <div className="flex-1 overflow-y-auto">
