@@ -216,7 +216,8 @@ def process_next_trigger(running_per_system: dict[int, int]) -> bool:
         use_serverless: bool = trigger.get("src_compute_mode") != "classic" and trigger.get("tgt_compute_mode") != "classic"
         job_id: str = validation_job_serverless_id if use_serverless else validation_job_id
         print(f"Launching validation job ({'serverless' if use_serverless else 'classic'})...")
-        w: WorkspaceClient = client.get_workspace_client()
+        # user normal workspace client since we are just triggerring a job, no advanced auth needed
+        w: WorkspaceClient = WorkspaceClient()
         run = w.jobs.run_now(job_id=job_id, job_parameters=params)
         run_url: str = f"{w.config.host}/jobs/{job_id}/runs/{run.run_id}"
 
