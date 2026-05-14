@@ -9,6 +9,7 @@ from typing import Any
 import base64
 from urllib.parse import urlparse
 import re
+from time import time
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.runtime import dbutils
 from pyspark.sql import SparkSession
@@ -18,6 +19,7 @@ from pyspark.sql import SparkSession
 class BackendAPIClient:
     backend_api_url: str | None = None
     _w: WorkspaceClient | None = None
+    _token_expires_at: float = 0
 
     def _host(self) -> str:
         host = SparkSession.builder.getOrCreate().conf.get("spark.databricks.workspaceUrl")
@@ -45,7 +47,8 @@ class BackendAPIClient:
         return w.apps.get(self.app_name).oauth2_app_client_id
 
     def get_workspace_client(self) -> WorkspaceClient:
-        if self._w is None:
+        now = time()
+        if self._w is None or now >= self._token_expires_at - 60:
             r = requests.post(
                 f"{self._host()}/oidc/v1/token",
                 data={
@@ -59,7 +62,9 @@ class BackendAPIClient:
                 timeout=30,
             )
             r.raise_for_status()
+            token_data = r.json()
             self._w = WorkspaceClient(host=self._host(), token=r.json()["access_token"], auth_type="pat")
+            self._token_expires_at = now + token_data.get("expires_in", 3600)
         return self._w
 
     def _serialize_value(self, val: Any) -> Any:
