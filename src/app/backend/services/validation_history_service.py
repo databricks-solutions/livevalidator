@@ -183,8 +183,14 @@ class ValidationHistoryService:
             "row_counts": "vh.row_count_source",
             "differences": "vh.rows_different",
         }
-        sort_col = valid_sort_cols.get(sort_by, "vh.requested_at")
-        sort_direction = "DESC" if sort_dir.lower() == "desc" else "ASC"
+        sort_keys = [s.strip() for s in sort_by.split(",")]
+        sort_dirs = [s.strip() for s in sort_dir.split(",")]
+        order_parts: list[str] = []
+        for i, key in enumerate(sort_keys):
+            col = valid_sort_cols.get(key, "vh.requested_at")
+            d = "DESC" if (sort_dirs[i] if i < len(sort_dirs) else "desc").lower() == "desc" else "ASC"
+            order_parts.append(f"{col} {d}")
+        order_clause = ", ".join(order_parts) if order_parts else "vh.requested_at DESC"
 
         stats_row = await self.db.fetchrow(
             f"""
@@ -224,7 +230,7 @@ class ValidationHistoryService:
             FROM control.validation_history vh
             {tag_join}
             {where_clause}
-            ORDER BY {sort_col} {sort_direction}
+            ORDER BY {order_clause}
             LIMIT ${param_idx} OFFSET ${param_idx + 1}
         """,
             *params,

@@ -130,16 +130,19 @@ export function ValidationResultsTable({
         </th>
       );
     }
+    const sortList = Array.isArray(sortConfig) ? sortConfig : (sortConfig ? [sortConfig] : []);
+    const sortIndex = sortList.findIndex(s => s.key === sortKey);
     return (
       <th 
         className={`text-left px-2 py-1.5 text-sm text-gray-300 font-semibold cursor-pointer hover:bg-charcoal-300/30 transition-colors select-none ${className}`}
-        onClick={() => onSort?.(sortKey)}
+        onClick={(e) => onSort?.(sortKey, e)}
       >
         <div className="flex items-center gap-1">
           {label}
-          {sortConfig?.key === sortKey && (
-            <span className="text-rust-light">
-              {sortConfig.direction === 'asc' ? '↑' : '↓'}
+          {sortIndex >= 0 && (
+            <span className="text-rust-light text-xs">
+              {sortList[sortIndex].direction === 'asc' ? '↑' : '↓'}
+              {sortList.length > 1 && <sup className="ml-0.5">{sortIndex + 1}</sup>}
             </span>
           )}
         </div>

@@ -31,8 +31,10 @@ export function ValidationResultsView({ highlightId, onClearHighlight, onNavigat
   const [dateTo, setDateTo] = useState('');
   const [activePreset, setActivePreset] = useState('7d');
   
-  // Sorting state
-  const [sortConfig, setSortConfig] = useState({ key: 'requested_at', direction: 'desc' });
+  // Sorting state (multi-column: first = primary, second = secondary, etc.)
+  const [sortConfig, setSortConfig] = useState([
+    { key: 'requested_at', direction: 'desc' },
+  ]);
   
   // Debounced filter values (for API calls)
   const debouncedEntityName = useDebounce(entityNameInput, 300);
@@ -114,8 +116,8 @@ export function ValidationResultsView({ highlightId, onClearHighlight, onNavigat
     const params = new URLSearchParams();
     params.set('limit', pageSize);
     params.set('offset', page * pageSize);
-    params.set('sort_by', sortConfig.key);
-    params.set('sort_dir', sortConfig.direction);
+    params.set('sort_by', sortConfig.map(s => s.key).join(','));
+    params.set('sort_dir', sortConfig.map(s => s.direction).join(','));
     
     if (debouncedEntityName) params.set('entity_name', debouncedEntityName);
     if (entityType) params.set('entity_type', entityType);
@@ -188,11 +190,24 @@ export function ValidationResultsView({ highlightId, onClearHighlight, onNavigat
   }, [highlightId, onClearHighlight]);
 
   // Handlers
-  const handleSort = (key) => {
-    setSortConfig(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
-    }));
+  const handleSort = (key, event) => {
+    setSortConfig(prev => {
+      const existing = prev.findIndex(s => s.key === key);
+      if (event?.shiftKey) {
+        // Shift-click: add/toggle secondary sort
+        if (existing >= 0) {
+          const updated = [...prev];
+          updated[existing] = { key, direction: prev[existing].direction === 'asc' ? 'desc' : 'asc' };
+          return updated;
+        }
+        return [...prev, { key, direction: 'asc' }];
+      }
+      // Regular click: make sole sort or toggle direction
+      if (existing >= 0 && prev.length === 1) {
+        return [{ key, direction: prev[0].direction === 'asc' ? 'desc' : 'asc' }];
+      }
+      return [{ key, direction: 'asc' }];
+    });
     setPage(0);
   };
 
