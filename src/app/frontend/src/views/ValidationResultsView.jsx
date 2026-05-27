@@ -16,7 +16,7 @@ function useDebounce(value, delay) {
   return debouncedValue;
 }
 
-export function ValidationResultsView({ highlightId, onClearHighlight, onNavigateToEntity }) {
+export function ValidationResultsView({ visible = true, highlightId, onClearHighlight, onNavigateToEntity }) {
   // Pagination state
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(100);
@@ -160,8 +160,9 @@ export function ValidationResultsView({ highlightId, onClearHighlight, onNavigat
     return () => { cancelled = true; };
   }, [queryString]);
 
-  // Auto-refresh every 30s when on first page with no filters
+  // Auto-refresh every 30s when visible, on first page with no filters
   useEffect(() => {
+    if (!visible) return;
     const isDefaultView = page === 0 && !debouncedEntityName && !entityType && !status && 
                           !sourceSystem && !targetSystem && filterTags.length === 0;
     if (!isDefaultView) return;
@@ -178,7 +179,23 @@ export function ValidationResultsView({ highlightId, onClearHighlight, onNavigat
     }, 30000);
     
     return () => clearInterval(interval);
-  }, [queryString, page, debouncedEntityName, entityType, status, sourceSystem, targetSystem, filterTags]);
+  }, [visible, queryString, page, debouncedEntityName, entityType, status, sourceSystem, targetSystem, filterTags]);
+
+  // Re-fetch when becoming visible (stale-while-revalidate)
+  const prevVisible = useRef(visible);
+  useEffect(() => {
+    if (visible && !prevVisible.current) {
+      fetch(`/api/validation-history?${queryString}`)
+        .then(r => r.json())
+        .then(result => {
+          setData(result.data || []);
+          setTotalCount(result.total || 0);
+          setStats(result.stats || { total: 0, succeeded: 0, failed: 0, errors: 0 });
+        })
+        .catch(() => {});
+    }
+    prevVisible.current = visible;
+  }, [visible, queryString]);
 
   // Scroll to highlighted row
   useEffect(() => {

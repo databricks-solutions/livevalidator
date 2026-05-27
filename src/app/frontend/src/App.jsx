@@ -540,14 +540,15 @@ export default function App() {
         {editingSystem && <SystemModal system={editingSystem} onSave={handleSystemSave} onClose={() => setEditingSystem(null)} />}
         {uploadCSVType && <UploadCSVModal type={uploadCSVType} systems={sys.data} schedules={sc.data} onClose={() => setUploadCSVType(null)} onUpload={refreshAll} />}
 
-        {/* Validation Results View (self-contained with server-side pagination) */}
-        {view === 'results' && (
+        {/* Validation Results View (always mounted to preserve filter state) */}
+        <div style={{ display: view === 'results' ? undefined : 'none' }}>
           <ValidationResultsView 
+            visible={view === 'results'}
             highlightId={highlightId}
             onClearHighlight={() => setHighlightId(null)}
             onNavigateToEntity={navigateToEntity}
           />
-        )}
+        </div>
 
         {/* Dashboard View (two-level routing) */}
         {view === 'dashboard' && !selectedDashboardId && (
