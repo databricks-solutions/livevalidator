@@ -106,7 +106,8 @@ def generate_read_query(
     """Generate the query to read data with type transformations applied.
     column_overrides: {col_name_lower: {system_id_str: sql_expression}}
     """
-    print(f"Mapping types for system: '{conn['system']['name']}' with type mapping function: \n{type_mapping_func or '(none)'}")
+    co = "\n  ".join(f"{col}: {expr}" for col, expr in column_overrides.items()) if column_overrides else "(none)"
+    print(f"Mapping types for system: '{conn['system']['name']}' with type mapping function: \n{type_mapping_func or '(none)'}\nColumn overrides:\n  {co}")
 
     transform_columns: Callable[[str, str], str] | None = None
     if type_mapping_func and type_mapping_func.strip():
