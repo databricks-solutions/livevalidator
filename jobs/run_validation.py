@@ -16,6 +16,7 @@ from databricks.sdk.runtime import dbutils
 from pyspark import StorageLevel
 from pyspark.sql import DataFrame, Row, SparkSession
 from pyspark.sql.functions import col, xxhash64, countDistinct
+from pyspark.sql.types import NullType, NumericType, StringType
 
 _nb_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
 sys.path.insert(0, "/Workspace" + os.path.dirname(_nb_path))
@@ -156,6 +157,10 @@ def persist_obj(obj: DataFrame, name: str, suffix: str, catalog: str = persist_c
         "delta.feature.allowColumnDefaults": "supported",
         "delta.feature.timestampNtz": "supported"
         }
+    # Coerce void (NullType) columns so Parquet has physical backing for Photon
+    void_cols = {f.name for f in obj.schema.fields if isinstance(f.dataType, NullType)}
+    if void_cols:
+        obj = obj.select(*[col(c).cast(StringType()) if c in void_cols else col(c) for c in obj.columns])
     obj.write.format("delta").mode("overwrite").options(**configs).saveAsTable(persisted_name)
     return spark.read.table(persisted_name)
 
