@@ -16,7 +16,7 @@ from databricks.sdk.runtime import dbutils
 from pyspark import StorageLevel
 from pyspark.sql import DataFrame, Row, SparkSession
 from pyspark.sql.functions import col, xxhash64, countDistinct
-from pyspark.sql.types import NullType, NumericType, StringType
+from pyspark.sql.types import DecimalType, NullType, StringType
 
 _nb_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
 sys.path.insert(0, "/Workspace" + os.path.dirname(_nb_path))
@@ -164,6 +164,18 @@ def persist_obj(obj: DataFrame, name: str, suffix: str, catalog: str = persist_c
     obj.write.format("delta").mode("overwrite").options(**configs).saveAsTable(persisted_name)
     return spark.read.table(persisted_name)
 
+def conform_types(src_df: DataFrame, tgt_df: DataFrame) -> tuple[DataFrame, DataFrame]:
+    """Align column order and resolve type mismatches (decimal precision → min of both sides). If types mismatch, cast to the source system's types."""
+    tgt_df = tgt_df.select(src_df.columns)
+    src_types = {f.name: f.dataType for f in src_df.schema.fields}
+    casts = {
+        f.name: DecimalType(min(src_types[f.name].precision, f.dataType.precision), min(src_types[f.name].scale, f.dataType.scale))
+        if isinstance(src_types.get(f.name), DecimalType) and isinstance(f.dataType, DecimalType) else src_types[f.name]
+        for f in tgt_df.schema.fields if f.name in src_types and src_types[f.name] != f.dataType
+    }
+    apply = lambda df: df.select(*[col(c).cast(casts[c]) if c in casts else col(c) for c in df.columns])
+    return (apply(src_df), apply(tgt_df)) if casts else (src_df, tgt_df)
+
 def run_except_all(src_df: DataFrame, tgt_df: DataFrame) -> DataFrame:
     """Find rows in source not in target using EXCEPT ALL"""
     return src_df.exceptAll(tgt_df)
@@ -173,7 +185,7 @@ def run_pk_compare(src_df: DataFrame, tgt_df: DataFrame, pk: list[str], how: str
     def rowhash_exact(df: DataFrame) -> DataFrame:
         cols: list = [col(c) for c in df.columns]
         return df.withColumn("__hash__", xxhash64(*cols))
-    
+
     src_hash: DataFrame = rowhash_exact(src_df)
     tgt_hash: DataFrame = rowhash_exact(tgt_df)
 
@@ -190,8 +202,7 @@ def run_pk_compare(src_df: DataFrame, tgt_df: DataFrame, pk: list[str], how: str
 def validate_rows(src_df: DataFrame, tgt_df: DataFrame, mode: str, row_count_match: bool, max_sample_rows: int) -> dict:
     """Row-level validation - returns diff count and samples"""
 
-    # ensure columns are ordered consistently for validation
-    tgt_df = tgt_df.select(src_df.columns)
+    src_df, tgt_df = conform_types(src_df, tgt_df)
     how: str = "leftouter" if row_count_match else "inner"
     comparison_func: Callable = run_except_all if mode == "except_all" else lambda s, t: run_pk_compare(s, t, pk_columns, how)    
     diff_df: DataFrame = comparison_func(src_df, tgt_df)
