@@ -1,6 +1,6 @@
 [project]
 name = "livevalidator"
-version = "0.1.0"
+version = "0.1.0-rc2"
 description = "Data validation tool for Databricks"
 requires-python = ">=3.11"
 
