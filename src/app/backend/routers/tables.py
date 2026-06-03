@@ -32,6 +32,15 @@ async def create_table(
     return await service.create(body.model_dump())
 
 
+@router.get("/name/{name}")
+async def get_table_by_name(
+    name: str,
+    db: DBSession = Depends(get_db),
+):
+    service = EntityService(db, "", "table")
+    return await service.get_by_name(name)
+
+
 @router.get("/{id}")
 async def get_table(
     id: int,

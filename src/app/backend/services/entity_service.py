@@ -139,6 +139,17 @@ class EntityService:
             raise HTTPException(404, "not found")
         return row
 
+    async def get_by_name(self, name: str) -> dict:
+        """Get entity by exact name."""
+        if self.entity_type == "query":
+            cols = ", ".join(CompareQueryRow.model_fields)
+            row = await self.db.fetchrow(f"SELECT {cols} FROM {self.db_table} WHERE name=$1", name)
+        else:
+            row = await self.db.fetchrow(f"SELECT * FROM {self.db_table} WHERE name=$1", name)
+        if not row:
+            raise HTTPException(404, f"{self.label} '{name}' not found")
+        return row
+
     async def create(self, data: dict) -> dict:
         """Create a new entity."""
         await self._require_system(data["src_system_id"], "Source")

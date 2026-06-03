@@ -32,6 +32,15 @@ async def create_query(
     return await service.create(body.model_dump())
 
 
+@router.get("/name/{name}")
+async def get_query_by_name(
+    name: str,
+    db: DBSession = Depends(get_db),
+):
+    service = EntityService(db, "", "query")
+    return await service.get_by_name(name)
+
+
 @router.get("/{id}")
 async def get_query(
     id: int,
