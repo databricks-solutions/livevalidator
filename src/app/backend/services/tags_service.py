@@ -45,6 +45,29 @@ class TagsService:
             entity_id,
         )
 
+    async def get_tag_entities(self, tag_id: int) -> list[dict]:
+        """Get all entities (with names) associated with a tag."""
+        if not await self.db.fetchrow("SELECT id FROM control.tags WHERE id = $1", tag_id):
+            raise HTTPException(status_code=404, detail="Tag not found")
+
+        return await self.db.fetch(
+            """
+            SELECT et.entity_type, et.entity_id,
+                CASE et.entity_type
+                    WHEN 'table' THEN d.name
+                    WHEN 'query' THEN cq.name
+                END AS name
+            FROM control.entity_tags et
+            LEFT JOIN control.datasets d
+                ON et.entity_type = 'table' AND et.entity_id = d.id
+            LEFT JOIN control.compare_queries cq
+                ON et.entity_type = 'query' AND et.entity_id = cq.id
+            WHERE et.tag_id = $1
+            ORDER BY et.entity_type, name
+        """,
+            tag_id,
+        )
+
     async def set_entity_tags(self, entity_type: str, entity_id: int, tag_names: list[str]) -> dict:
         """Set tags for an entity (replaces existing tags)."""
         await self.db.execute(

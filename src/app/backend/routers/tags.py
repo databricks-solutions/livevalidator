@@ -23,6 +23,15 @@ async def create_tag(
     return await service.create_tag(body.get("name", ""))
 
 
+@router.get("/{tag_id}/entities")
+async def get_tag_entities(
+    tag_id: int,
+    db: DBSession = Depends(get_db),
+):
+    service = TagsService(db)
+    return await service.get_tag_entities(tag_id)
+
+
 @router.get("/entity/{entity_type}/{entity_id}")
 async def get_entity_tags(
     entity_type: str,
