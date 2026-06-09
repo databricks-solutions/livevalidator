@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "livevalidator"
-version = "0.0.1"
+version = "0.1.0"
 description = "Coontrol-plane web app for LiveValidator"
 authors = [
   { name="Dan Zafar", email="dan.zafar@databricks.com" }
