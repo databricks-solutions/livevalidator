@@ -58,7 +58,7 @@ const STATUS_BADGE = {
 
 // ─── Entity Detail Page ───────────────────────────────────────────────
 
-function EntityDetailView({ entity, tables, systems, schedules, onBack, onConfigureTable, onRunAllLineage, onRefresh, onTrigger, onEditTable, onEditQuery, onSelectEntity }) {
+function EntityDetailView({ entity, tables, systems, schedules, onBack, onConfigureTable, onRunAllLineage, onRefresh, onTrigger, onEditTable, onEditQuery, onSelectEntity, visible = true }) {
   const [runs, setRuns] = useState(null);
   const [runsLoading, setRunsLoading] = useState(true);
   const [selectedRunId, setSelectedRunId] = useState(null);
@@ -110,12 +110,12 @@ function EntityDetailView({ entity, tables, systems, schedules, onBack, onConfig
 
   useEffect(() => { fetchRuns(); }, [entity.id, entityType]);
 
-  // Auto-refresh both lists every 5s when there are pending triggers (silent)
+  // Auto-refresh both lists every 5s when there are pending triggers (silent), only while visible
   useEffect(() => {
-    if (pendingTriggers.length === 0) return;
+    if (!visible || pendingTriggers.length === 0) return;
     const interval = setInterval(() => fetchRuns(false), 5000);
     return () => clearInterval(interval);
-  }, [pendingTriggers.length, entityType, entity.id]);
+  }, [visible, pendingTriggers.length, entityType, entity.id]);
 
   // Fetch detail when selected run changes
   useEffect(() => {
@@ -701,6 +701,7 @@ function EntityDetailView({ entity, tables, systems, schedules, onBack, onConfig
 // ─── Entity List (main table) ─────────────────────────────────────────
 
 export function AnalysisView({
+  visible = true,
   tables,
   queries,
   systems,
@@ -723,6 +724,7 @@ export function AnalysisView({
 }) {
   const [filterText, setFilterText] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
   const [sourceSystem, setSourceSystem] = useState('');
   const [targetSystem, setTargetSystem] = useState('');
   const [selectedEntity, setSelectedEntity] = useState(null);
@@ -789,10 +791,8 @@ export function AnalysisView({
   const allTags = useMemo(() => {
     const tagSet = new Set();
     for (const e of entities) {
-      if (e.last_run_status === 'failed' || e.last_run_status === 'error') {
-        for (const tag of (e._parsedTags || [])) {
-          tagSet.add(tag);
-        }
+      for (const tag of (e._parsedTags || [])) {
+        tagSet.add(tag);
       }
     }
     return Array.from(tagSet).sort();
@@ -814,13 +814,18 @@ export function AnalysisView({
   } = useTagFilter(allTags);
 
   const filtered = useMemo(() => {
-    let result = entities.filter(e => e.last_run_status === 'failed' || e.last_run_status === 'error');
+    let result = entities;
     if (filterText) {
       const term = filterText.toLowerCase();
       result = result.filter(e => e.name.toLowerCase().includes(term));
     }
     if (filterType) {
       result = result.filter(e => e._entityType === filterType);
+    }
+    if (filterStatus) {
+      result = filterStatus === 'never'
+        ? result.filter(e => !e.last_run_status)
+        : result.filter(e => e.last_run_status === filterStatus);
     }
     if (sourceSystem) {
       result = result.filter(e => e._srcSystemName === sourceSystem);
@@ -834,12 +839,13 @@ export function AnalysisView({
       const bTime = b.last_run_timestamp ? new Date(b.last_run_timestamp).getTime() : 0;
       return bTime - aTime;
     });
-  }, [entities, filterText, filterType, sourceSystem, targetSystem, filterByTags]);
+  }, [entities, filterText, filterType, filterStatus, sourceSystem, targetSystem, filterByTags]);
 
-  const hasActiveFilters = filterText || filterType || filterTags.length > 0 || sourceSystem || targetSystem;
+  const hasActiveFilters = filterText || filterType || filterStatus || filterTags.length > 0 || sourceSystem || targetSystem;
   const clearAllFilters = () => {
     setFilterText('');
     setFilterType('');
+    setFilterStatus('');
     setSourceSystem('');
     setTargetSystem('');
     clearTags();
@@ -861,6 +867,7 @@ export function AnalysisView({
         onEditTable={onEditTable}
         onEditQuery={onEditQuery}
         onSelectEntity={setSelectedEntity}
+        visible={visible}
       />
     );
   }
@@ -877,7 +884,7 @@ export function AnalysisView({
       <div className="mb-4 flex items-start justify-between">
         <div>
           <h2 className="text-3xl font-bold text-rust-light mb-1">Analysis</h2>
-          <p className="text-gray-400 text-base">Showing tables and queries whose latest validation run failed. Click any row to investigate.</p>
+          <p className="text-gray-400 text-base">Showing all configured tables and queries. Click any row to investigate.</p>
         </div>
         <button
           onClick={onRefresh}
@@ -912,6 +919,16 @@ export function AnalysisView({
             inputElementRef={inputElementRef}
             entityType={filterType}
             onEntityTypeChange={setFilterType}
+            showStatusFilter={true}
+            status={filterStatus}
+            onStatusChange={setFilterStatus}
+            statusOptions={[
+              { value: '', label: 'All Statuses' },
+              { value: 'succeeded', label: 'Success' },
+              { value: 'failed', label: 'Failed' },
+              { value: 'error', label: 'Error' },
+              { value: 'never', label: 'Never run' },
+            ]}
             showSystemFilters={true}
             sourceSystem={sourceSystem}
             onSourceSystemChange={setSourceSystem}
@@ -929,7 +946,7 @@ export function AnalysisView({
                 <tr>
                   <th className="text-left px-3 py-2 text-sm text-gray-300 font-semibold">Display name</th>
                   <th className="text-left px-3 py-2 text-sm text-gray-300 font-semibold">Type</th>
-                  <th className="text-left px-3 py-2 text-sm text-gray-300 font-semibold">Last Failure</th>
+                  <th className="text-left px-3 py-2 text-sm text-gray-300 font-semibold">Status</th>
                   <th className="text-left px-3 py-2 text-sm text-gray-300 font-semibold">Mode</th>
                   <th className="text-left px-3 py-2 text-sm text-gray-300 font-semibold">Tags</th>
                   <th className="text-left px-3 py-2 text-sm text-gray-300 font-semibold">Source → Target</th>
@@ -976,7 +993,7 @@ export function AnalysisView({
                           </span>
                         </td>
                         <td className="px-3 py-2">
-                          {failureReason && (
+                          {failureReason ? (
                             <span className={`px-1.5 py-0.5 text-xs rounded-full border ${
                               lastRunStatus === 'error' ? 'bg-yellow-900/40 text-yellow-300 border-yellow-700' :
                               failureReason === 'Row count' ? 'bg-red-900/40 text-red-300 border-red-700' :
@@ -985,7 +1002,11 @@ export function AnalysisView({
                             }`}>
                               {failureReason}
                             </span>
-                          )}
+                          ) : lastRunStatus === 'succeeded' ? (
+                            <span className="px-1.5 py-0.5 text-xs rounded-full border bg-green-900/40 text-green-300 border-green-700">
+                              Success
+                            </span>
+                          ) : null}
                         </td>
                         <td className="px-2 py-1 text-gray-300 text-sm whitespace-nowrap">
                           {entity.compare_mode || '—'}

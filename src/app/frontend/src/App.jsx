@@ -86,7 +86,6 @@ const InlineEditCell = ({ value, onSave, onCancel, type = "text", options = [] }
 
 export default function App() {
   const [view, setView] = useState('results');
-  const [viewResetKey, setViewResetKey] = useState(0);
   const prevView = useRef(view);
   const [conflict, setConflict] = useState(null);
   const [notification, setNotification] = useState(null); // { type: 'success' | 'error', message: string }
@@ -475,7 +474,6 @@ export default function App() {
     <CurrentUserContext.Provider value={currentUser}>
       <div className="flex h-screen font-sans">
         <Sidebar view={view} setView={(v) => { 
-          if (v === view) setViewResetKey(k => k + 1); 
           setView(v); 
           if (v === 'dashboard') setSelectedDashboardId(null); 
         }} setupRequired={setupRequired} />
@@ -568,10 +566,10 @@ export default function App() {
           />
         )}
 
-        {/* Analysis View */}
-        {view === 'analysis' && (
+        {/* Analysis View (always mounted to preserve filter state) */}
+        <div style={{ display: view === 'analysis' ? undefined : 'none' }}>
           <AnalysisView
-            key={viewResetKey}
+            visible={view === 'analysis'}
             tables={tbl.data}
             queries={qs.data}
             systems={sys.data}
@@ -592,7 +590,7 @@ export default function App() {
             initialEntityType={analysisTarget?.entityType}
             onClearInitialEntity={() => setAnalysisTarget(null)}
           />
-        )}
+        </div>
 
         {/* Tables View */}
         {view === 'tables' && (

@@ -30,6 +30,12 @@ export function ResultFilterBar({
   showStatusFilter = false,
   status = '',
   onStatusChange,
+  statusOptions = [
+    { value: '', label: 'All Statuses' },
+    { value: 'succeeded', label: 'Succeeded' },
+    { value: 'failed', label: 'Failed' },
+    { value: 'error', label: 'Error' },
+  ],
   // Source/Target system filters
   showSystemFilters = false,
   sourceSystem = '',
@@ -116,10 +122,9 @@ export function ResultFilterBar({
         {/* Status filter (optional) */}
         {showStatusFilter && (
           <select value={status} onChange={(e) => onStatusChange?.(e.target.value)} className={selectClass}>
-            <option value="">All Statuses</option>
-            <option value="succeeded">Succeeded</option>
-            <option value="failed">Failed</option>
-            <option value="error">Error</option>
+            {statusOptions.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
           </select>
         )}
 
