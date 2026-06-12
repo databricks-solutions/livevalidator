@@ -5,6 +5,7 @@ import {
   ExceptAllCountMismatchView,
   PKPendingView,
   ExceptAllModeView,
+  SchemaMismatchAlert,
 } from '../SampleViews';
 
 export function SampleDifferencesContent({ validation }) {
@@ -23,14 +24,14 @@ export function SampleDifferencesContent({ validation }) {
   const isExceptAllCountPending = validation.compare_mode === 'except_all' && !validation.row_count_match && !isExceptAllMode && !isExceptAllCountMismatch;
   const isPKCountPending = validation.compare_mode === 'primary_key' && !validation.row_count_match && !isRowCountMismatch;
 
-  if (isPKMode) return <PKModeView samples={samples} validation={validation} />;
-  if (isRowCountMismatch) return <PKRowCountMismatchView samples={samples} validation={validation} />;
-  if (isExceptAllCountMismatch) return <ExceptAllCountMismatchView samples={samples} validation={validation} />;
-  if (isPKPending) return <PKPendingView samples={samples} validation={validation} />;
-  if (isExceptAllMode) return <ExceptAllModeView samples={samples} validation={validation} />;
-  
-  if (isExceptAllCountPending || isPKCountPending) {
-    return (
+  let body;
+  if (isPKMode) body = <PKModeView samples={samples} validation={validation} />;
+  else if (isRowCountMismatch) body = <PKRowCountMismatchView samples={samples} validation={validation} />;
+  else if (isExceptAllCountMismatch) body = <ExceptAllCountMismatchView samples={samples} validation={validation} />;
+  else if (isPKPending) body = <PKPendingView samples={samples} validation={validation} />;
+  else if (isExceptAllMode) body = <ExceptAllModeView samples={samples} validation={validation} />;
+  else if (isExceptAllCountPending || isPKCountPending) {
+    body = (
       <div className="p-4 bg-charcoal-400 border border-charcoal-300 rounded-lg">
         <p className="text-gray-300 mb-2"><span className="font-semibold">Row count mismatch detected</span></p>
         <p className="text-gray-400 text-sm">
@@ -39,9 +40,16 @@ export function SampleDifferencesContent({ validation }) {
         <p className="text-gray-500 text-sm mt-3">Analysis data may still be processing. Check the validation notebook for more details.</p>
       </div>
     );
+  } else {
+    body = <p className="text-gray-400">No sample data available</p>;
   }
-  
-  return <p className="text-gray-400">No sample data available</p>;
+
+  return (
+    <div className="space-y-3">
+      <SchemaMismatchAlert validation={validation} />
+      {body}
+    </div>
+  );
 }
 
 export function SampleDifferencesModal({ validation, onClose }) {

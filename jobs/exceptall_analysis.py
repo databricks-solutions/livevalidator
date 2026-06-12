@@ -36,6 +36,17 @@ def run_except_all_count_analysis(result: dict) -> dict | None:
         return {"mode": "row_count_mismatch_except_all",
                 "data": {"skipped": True, "reason": "source_limited_and_fewer"}}
 
+    # exceptAll requires both sides to have identical, positionally-aligned columns.
+    # When schemas differ, restrict the comparison to columns common to both.
+    tgt_cols: set[str] = set(tgt_df.columns)
+    common_cols: list[str] = [c for c in src_df.columns if c in tgt_cols]
+    if not common_cols:
+        return {"mode": "row_count_mismatch_except_all",
+                "data": {"skipped": True, "reason": "no_common_columns"}}
+    if common_cols != src_df.columns or common_cols != tgt_df.columns:
+        src_df = src_df.select(*common_cols)
+        tgt_df = tgt_df.select(*common_cols)
+
     try:
         if not row_count_match and src_tgt_diff_df is None:
             src_tgt_diff_df = src_df.exceptAll(tgt_df)
