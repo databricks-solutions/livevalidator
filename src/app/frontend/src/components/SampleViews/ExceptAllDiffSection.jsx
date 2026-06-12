@@ -16,7 +16,7 @@ export function ExceptAllDiffSection({ title, data, tableName, defaultExpanded =
         className="w-full px-3 py-2 bg-charcoal-400 flex items-center justify-between hover:bg-charcoal-400/80 transition-colors"
       >
         <span className="text-sm font-semibold text-gray-200">
-          {expanded ? '▼' : '▶'} {title} ({count.toLocaleString()} rows)
+          {expanded ? '▼' : '▶'} {title} ({(count ?? 0).toLocaleString()} rows)
         </span>
       </button>
       
@@ -24,7 +24,7 @@ export function ExceptAllDiffSection({ title, data, tableName, defaultExpanded =
         <div className="p-3">
           {samples && samples.length > 0 ? (
             <>
-              <p className="text-xs text-gray-400 mb-2">Samples ({samples.length} of {count.toLocaleString()})</p>
+              <p className="text-xs text-gray-400 mb-2">Samples ({samples.length} of {(count ?? 0).toLocaleString()})</p>
               <div className="overflow-x-auto">
                 <table className="w-full border border-charcoal-300 rounded text-xs">
                   <thead className="bg-charcoal-400">

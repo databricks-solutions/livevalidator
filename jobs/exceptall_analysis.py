@@ -25,7 +25,7 @@ def run_except_all_count_analysis(result: dict) -> dict | None:
     row_count_source: int = result.get("row_count_source", 0)
     row_count_target: int = result.get("row_count_target", 0)
     row_count_match: bool = result.get("row_count_match", False)
-    in_src_not_tgt_count: int = result.get("rows_different", 0)
+    in_src_not_tgt_count: int = result.get("rows_different") or 0
     src_tgt_diff_df: DataFrame | None = result.get("diff_df")
     in_src_not_tgt_samples: list = result.get("sample_differences", [])
 
