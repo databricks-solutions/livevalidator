@@ -31,10 +31,15 @@ def compare_pk_samples(
     """
     if len(src_rows) != len(tgt_rows):
         return None
-    
+
+    # Stringify keys so mixed/None PK types stay comparable; order is arbitrary,
+    # we only need src/tgt sorted identically to line up matching rows.
+    def sort_key(item: dict) -> list[str]:
+        return [str(item[pk]) if item[pk] is not None else "" for pk in pk_columns]
+
     zipped_samples = zip(
-        sorted(src_rows, key=lambda item: [item[pk] for pk in pk_columns]),
-        sorted(tgt_rows, key=lambda item: [item[pk] for pk in pk_columns])
+        sorted(src_rows, key=sort_key),
+        sorted(tgt_rows, key=sort_key)
     )
     
     return [
