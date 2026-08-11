@@ -30,7 +30,7 @@ export function SystemsView({
           {data.map(row => {
             const isDatabricks = row.kind === 'Databricks';
             const isOracle = row.kind === 'Oracle';
-            const showDatabase = ['Postgres', 'SQLServer', 'MySQL', 'Netezza', 'Oracle'].includes(row.kind);
+            const showDatabase = ['Postgres', 'SQLServer', 'Synapse', 'MySQL', 'Netezza', 'Oracle'].includes(row.kind);
             return (
               <div key={row.id} className="bg-charcoal-500 border border-charcoal-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
