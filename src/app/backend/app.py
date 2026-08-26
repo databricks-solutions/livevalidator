@@ -29,7 +29,7 @@ from backend.routers import (
 )
 from backend.services.users_service import UsersService
 
-app = FastAPI(title="LiveValidator Control Plane API", version="0.1.0")
+app = FastAPI(title="LiveValidator Control Plane API", version="0.1.1")
 
 
 # ---------- Middleware ----------

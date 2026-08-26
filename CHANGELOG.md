@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.1.1 (2026-08-26)
+
+Synapse as a source, plus post-comparison robustness.
+
+### Connectors
+
+- Add official Azure Synapse source support ([`357e034`](https://github.com/databricks-solutions/livevalidator/commit/357e034), [`b8f2663`](https://github.com/databricks-solutions/livevalidator/commit/b8f2663))
+
+### Validation engine
+
+- Handle null values in primary keys during post comparison ([`ef6de44`](https://github.com/databricks-solutions/livevalidator/commit/ef6de44))
+- Fix `except_all` post analysis when schemas don't match ([`649cd4e`](https://github.com/databricks-solutions/livevalidator/commit/649cd4e), [`ee167fc`](https://github.com/databricks-solutions/livevalidator/commit/ee167fc))
+
 ## v0.1.0 (2026-06-08)
 
 First stable release. Folds all post-rc schema migrations into the base DDL and aligns version numbers across the backend, frontend, and packaging metadata.
