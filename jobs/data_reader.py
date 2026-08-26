@@ -50,7 +50,7 @@ def format_watermark_expr(expr: str, kind: str) -> str:
 
     def _requote(m: re.Match[str]) -> str:
         name = m.group(1)
-        if kind == "SQLServer":
+        if kind in ("SQLServer", "Synapse"):
             return f"[{name.replace(']', ']]')}]"
         if kind in ("Oracle", "Netezza"):
             name = name.upper()
@@ -86,7 +86,7 @@ def get_column_types(conn: dict, table: str) -> list[tuple[str, str]]:
             SELECT column_name, data_type FROM all_tab_columns
             WHERE table_name = '{tbl.upper()}' AND owner = '{schema.upper()}'
             """
-        case "Netezza" | "SQLServer" | "MySQL" | "Postgres" | "Redshift" | "Snowflake":
+        case "Netezza" | "SQLServer" | "Synapse" | "MySQL" | "Postgres" | "Redshift" | "Snowflake":
             query_columns = f"""
             SELECT column_name, data_type FROM information_schema.columns
             WHERE UPPER(table_name) = '{tbl.upper()}' AND UPPER(table_schema) = '{schema.upper()}'

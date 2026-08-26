@@ -55,6 +55,8 @@ class JDBCReader:
                     jdbc_str = f"jdbc:oracle:thin:@//{system['host']}:{system['port']}/{system['database']}"
                 case "SQLServer":
                     jdbc_str = f"jdbc:sqlserver://{system['host']}:{system['port']};databaseName={system['database']};encrypt=true;trustServerCertificate=true"
+                case "Synapse":
+                    jdbc_str = f"jdbc:sqlserver://{system['host']}:{system['port']};database={system['database']};encrypt=true;trustServerCertificate=false"
                 case "Redshift":
                     jdbc_str = f"jdbc:redshift://{system['host']}:{system['port']}/{system['database']}"
                 case _:
@@ -91,7 +93,7 @@ class JDBCReader:
             return None
 
         match self.conn["system"]["kind"]:
-            case "SQLServer":
+            case "SQLServer" | "Synapse":
                 from sql_server_columns import sqlserver_partition_info
 
                 self.partition_info = sqlserver_partition_info(table, lambda q: self.query(q))

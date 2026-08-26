@@ -74,6 +74,9 @@ DEFAULT_TRANSFORMATIONS = {
 """,
 }
 
+# Synapse dedicated SQL pools are T-SQL, so they share SQL Server's type handling
+DEFAULT_TRANSFORMATIONS["Synapse"] = DEFAULT_TRANSFORMATIONS["SQLServer"]
+
 
 def get_default_transformation(system_kind: str) -> str:
     """

@@ -248,3 +248,52 @@ class TestDetectPartitionInfo:
         r.detect_partition_info("dbo.table")
         assert r.partition_info is not None
         assert r.partition_info.column == "id"
+
+    @patch("sql_server_columns.sqlserver_partition_info")
+    def test_delegates_to_sqlserver_for_synapse(self, mock_ss):
+        mock_ss.return_value = PartitionInfo("id", 1, 1000)
+        r = _reader("direct", kind="Synapse")
+        r.detect_partition_info("dbo.table")
+        assert r.partition_info is not None
+        assert r.partition_info.column == "id"
+
+
+# ---------------------------------------------------------------------------
+# _direct_reader JDBC string generation
+# ---------------------------------------------------------------------------
+class TestDirectReaderUrl:
+    def _url(self, kind: str, **extras) -> str:
+        r = _reader(
+            "direct",
+            kind=kind,
+            jdbc_string=None,
+            driver_connector="com.example.Driver",
+            host="myhost",
+            port=1433,
+            database="mydb",
+            **extras,
+        )
+        r._direct_reader
+        url_call = r.spark.read.format.return_value.option.call_args_list[0]
+        return url_call[0][1]
+
+    def test_sqlserver_url(self):
+        assert self._url("SQLServer") == (
+            "jdbc:sqlserver://myhost:1433;databaseName=mydb;encrypt=true;trustServerCertificate=true"
+        )
+
+    def test_synapse_url(self):
+        assert self._url("Synapse") == (
+            "jdbc:sqlserver://myhost:1433;database=mydb;encrypt=true;trustServerCertificate=false"
+        )
+
+    def test_explicit_jdbc_string_wins(self):
+        r = _reader(
+            "direct",
+            kind="Synapse",
+            jdbc_string="jdbc:sqlserver://custom:1433;database=other",
+            driver_connector="com.example.Driver",
+        )
+        r._direct_reader
+        url_call = r.spark.read.format.return_value.option.call_args_list[0]
+        assert url_call[0][1] == "jdbc:sqlserver://custom:1433;database=other"

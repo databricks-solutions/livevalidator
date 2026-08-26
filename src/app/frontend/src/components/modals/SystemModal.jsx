@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { apiCall } from '../../services/api';
 
-const SYSTEM_KINDS = ['Databricks', 'Netezza', 'Teradata', 'Oracle', 'Postgres', 'Redshift', 'SQLServer', 'MySQL', 'other'];
+const SYSTEM_KINDS = ['Databricks', 'Netezza', 'Teradata', 'Oracle', 'Postgres', 'Redshift', 'SQLServer', 'Synapse', 'MySQL', 'other'];
 
 // Helper to determine default max_rows based on system kind
 const getDefaultMaxRows = (kind) => {
@@ -16,7 +16,7 @@ const getDefaultPort = (kind) => {
     case 'Oracle': return 1521;
     case 'Postgres': return 5432;
     case 'MySQL': return 3306;
-    case 'SQLServer': return 1433;
+    case 'SQLServer': case 'Synapse': return 1433;
     case 'Netezza': return 5480;
     case 'Redshift': return 5439;
     case 'Teradata': return 443;
@@ -30,7 +30,7 @@ const getDefaultDriver = (kind) => {
     case 'Oracle': return 'oracle.jdbc.OracleDriver';
     case 'Postgres': return 'org.postgresql.Driver';
     case 'MySQL': return 'com.mysql.cj.jdbc.Driver';
-    case 'SQLServer': return 'com.microsoft.sqlserver.jdbc.SQLServerDriver';
+    case 'SQLServer': case 'Synapse': return 'com.microsoft.sqlserver.jdbc.SQLServerDriver';
     case 'Netezza': return 'org.netezza.Driver';
     case 'Redshift': return 'com.amazon.redshift.jdbc42.Driver';
     case 'Teradata': return 'com.teradata.jdbc.TeraDriver';
@@ -49,6 +49,8 @@ const getJdbcPreview = (kind, host, port, database) => {
       return `jdbc:oracle:thin:@//${h}:${p}/${d}`;
     case 'SQLServer':
       return `jdbc:sqlserver://${h}:${p};databaseName=${d};encrypt=true;trustServerCertificate=true`;
+    case 'Synapse':
+      return `jdbc:sqlserver://${h}:${p};database=${d};encrypt=true;trustServerCertificate=false`;
     case 'Teradata':
       return `jdbc:teradata://${h}`;
     case 'Redshift':
@@ -182,7 +184,7 @@ export function SystemModal({ system, onSave, onClose }) {
   const isTeradata = form.kind === 'Teradata';
   const needsManualDriver = isNetezza || isOther;
   const driverNotInDBR = ['Netezza', 'Teradata', 'Oracle', 'Redshift'].includes(form.kind);
-  const showDatabase = ['Postgres', 'Redshift', 'SQLServer', 'MySQL', 'Netezza', 'Oracle'].includes(form.kind);
+  const showDatabase = ['Postgres', 'Redshift', 'SQLServer', 'Synapse', 'MySQL', 'Netezza', 'Oracle'].includes(form.kind);
   const showHostPort = !isDatabricks && !isOther;
   const isJdbc = !isDatabricks;
   const isDirectJdbc = isJdbc && form.jdbc_method === 'direct';
